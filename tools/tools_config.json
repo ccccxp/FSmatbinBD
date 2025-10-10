@@ -1,0 +1,14 @@
+{
+  "witchybnd": {
+    "exe_path": "tools/WitchyBND/WitchyBND.exe",
+    "version": "auto-detect",
+    "description": "WitchyBND tool for DCX/MATBIN processing"
+  },
+  "paths": {
+    "tools_dir": "tools/",
+    "temp_dir": "temp/",
+    "output_dir": "output/"
+  },
+  "integration_date": "2024-12",
+  "status": "integrated"
+}
