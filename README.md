@@ -1,6 +1,6 @@
 # FSmatbinBD V1.1 - 3D Material Library Query & Management System
 
-A Python-based 3D material library query and management tool designed for game developers and 3D artists, supporting material data querying, importing, exporting, and batch processing.
+A Python-based 3D material library query and management tool designed for ER/NR game, supporting material data querying, importing, exporting, and batch processing.
 
 ## 🚀 Core Features
 
@@ -77,5 +77,6 @@ If you encounter issues or have suggestions for improvement, please contact us t
 - **Bug Reports**: Please provide detailed steps to reproduce the issue
 
 ---
+
 
 **Note**: This software is an open-source project for educational and research purposes only. Please comply with relevant laws and regulations during use.
