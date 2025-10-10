@@ -11,6 +11,7 @@ from typing import Optional, Callable
 from ..core.database import MaterialDatabase
 from ..core.xml_parser import MaterialXMLParser
 from ..core.i18n import _
+from ..utils.helpers import show_multilingual_confirmation
 
 
 class LibraryManagerDialog:
@@ -145,7 +146,7 @@ class LibraryManagerDialog:
                 self._add_single_file()
                 
         except Exception as e:
-            messagebox.showerror(_('error'), _('import_mode_failed', error=str(e)))
+            messagebox.showerror(_('error'), _('import_mode_failed').format(error=str(e)))
     
     def _add_library_dcx(self):
         """添加DCX材质库"""
@@ -160,7 +161,7 @@ class LibraryManagerDialog:
             # 显示DCX导入对话框
             DCXImportDialog(self.dialog, self.database, on_import_complete)
         except Exception as e:
-            messagebox.showerror(_('error'), _('import_dcx_failed', error=str(e)))
+            messagebox.showerror(_('error'), _('import_dcx_failed').format(error=str(e)))
     
     def _add_library_folder(self):
         """添加材质库文件夹"""
@@ -285,7 +286,7 @@ class LibraryManagerDialog:
         library_id = self.tree.item(item)['tags'][0]
         
         # 确认删除
-        result = messagebox.askyesno(_('confirm'), _('confirm_delete_library_dialog').format(name=library_name))
+        result = show_multilingual_confirmation(_('confirm'), _('confirm_delete_library_dialog').format(name=library_name), parent=self)
 
         if result:
             try:

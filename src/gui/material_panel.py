@@ -1003,6 +1003,8 @@ class MaterialPanel:
                 self.refresh_btn.config(text=_("menu_refresh"))
             if hasattr(self, 'save_as_btn'):
                 self.save_as_btn.config(text=_('save_as_button'))
+            if hasattr(self, 'autopack_check'):
+                self.autopack_check.config(text=_('add_to_autopack'))
             
             # 更新空状态提示
             if hasattr(self, 'empty_label'):

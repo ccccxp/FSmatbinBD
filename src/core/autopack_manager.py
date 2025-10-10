@@ -150,11 +150,28 @@ class AutoPackManager:
         }
         
         try:
+            # 调试日志
+            logger.info(f"开始执行自动封包，基础目录: {base_pack_dir}")
+            logger.info(f"当前待封包列表项目数: {len(self.pending_list)}")
+            
+            # 首先检查是否有任何待封包项目
+            if not self.pending_list:
+                from .i18n import _
+                result['error'] = "待封包列表为空"
+                result['success'] = False
+                logger.warning("封包失败: 待封包列表为空")
+                return result
+            
             # 筛选有目标路径的项目
             items_to_pack = [item for item in self.pending_list if item.get('target_path')]
+            logger.info(f"筛选后有目标路径的项目数: {len(items_to_pack)}")
             
             if not items_to_pack:
-                raise ValueError("没有指定封包路径的项目")
+                from .i18n import _
+                result['error'] = _('no_target_path_items')
+                result['success'] = False
+                logger.warning("封包失败: 没有指定封包路径的项目")
+                return result
             
             # 按目标路径分组
             path_groups = {}
@@ -164,48 +181,74 @@ class AutoPackManager:
                     path_groups[target_path] = []
                 path_groups[target_path].append(item)
             
-            # 执行封包 - 使用多线程批量操作优化大量文件处理
+            # 执行封包 - 按目标路径分组处理
             total_packed = 0
             total_failed = 0
             
+            # 处理每个路径分组
             for target_path, items in path_groups.items():
-                full_target_path = os.path.join(base_pack_dir, target_path)
+                # 创建目标目录
+                if target_path:
+                    full_target_path = os.path.join(base_pack_dir, target_path)
+                else:
+                    full_target_path = base_pack_dir
+                    
                 os.makedirs(full_target_path, exist_ok=True)
+                logger.info(f"处理目标路径: {target_path}, 完整路径: {full_target_path}")
                 
-                # 如果项目数量较多，可以考虑使用批量复制操作
-                batch_copy_success = 0
-                batch_copy_failed = 0
-                
+                # 复制当前分组的matbin文件到目标目录
+                matbin_files_copied = []
                 for item in items:
                     try:
-                        # 复制.matbin文件到目标路径
                         source_file = item['matbin_file']
                         target_file = os.path.join(full_target_path, item['filename'])
                         
                         if os.path.exists(source_file):
                             shutil.copy2(source_file, target_file)
-                            result['packed_files'].append({
-                                'source': source_file,
-                                'target': target_file,
-                                'xml_file': item['xml_file']
-                            })
-                            batch_copy_success += 1
-                            logger.info(f"封包成功: {source_file} -> {target_file}")
+                            matbin_files_copied.append(target_file)
+                            logger.info(f"文件复制成功: {source_file} -> {target_file}")
                         else:
                             raise FileNotFoundError(f"源文件不存在: {source_file}")
                             
                     except Exception as e:
                         result['failed_files'].append({
-                            'file': item.get('matbin_file', '未知'),
+                            'filename': item.get('filename', '未知'),
                             'error': str(e)
                         })
-                        batch_copy_failed += 1
-                        logger.error(f"封包失败: {item.get('matbin_file', '未知')} - {str(e)}")
+                        total_failed += 1
+                        logger.error(f"文件复制失败: {item.get('matbin_file', '未知')} - {str(e)}")
+                        continue
                 
-                total_packed += batch_copy_success
-                total_failed += batch_copy_failed
+                # 记录当前分组的成功文件
+                for copied_file in matbin_files_copied:
+                    result['packed_files'].append({
+                        'source': item['matbin_file'],
+                        'target': copied_file,
+                        'xml_file': item['xml_file'],
+                        'target_path': target_path
+                    })
                 
-                logger.info(f"路径 {target_path}: 成功 {batch_copy_success}, 失败 {batch_copy_failed}")
+                total_packed += len(matbin_files_copied)
+                logger.info(f"路径分组 '{target_path}': 成功复制 {len(matbin_files_copied)} 个文件")
+            
+            # 如果有文件成功复制，使用WitchyBND对整个基础目录进行BND封包
+            if total_packed > 0:
+                try:
+                    # 生成BND文件名（使用基础目录的名称）
+                    bnd_name = os.path.basename(base_pack_dir.rstrip(os.sep))
+                    bnd_file = self._create_bnd_package(base_pack_dir, bnd_name)
+                    
+                    if bnd_file:
+                        # 更新所有已复制文件的信息，添加BND文件引用
+                        for packed_item in result['packed_files']:
+                            packed_item['bnd_file'] = bnd_file
+                        
+                        logger.info(f"BND封包成功: {bnd_file} (包含 {total_packed} 个文件)")
+                    else:
+                        logger.warning(f"BND封包失败，但文件复制成功")
+                        
+                except Exception as e:
+                    logger.warning(f"BND封包失败，但文件复制成功: {str(e)}")
             
             result['packed_count'] = total_packed
             result['failed_count'] = total_failed
@@ -224,6 +267,90 @@ class AutoPackManager:
             logger.error(f"执行自动封包失败: {str(e)}")
         
         return result
+    
+    def _create_bnd_package(self, source_dir: str, target_name: str) -> Optional[str]:
+        """
+        使用WitchyBND将基础目录重新打包为BND文件
+        
+        Args:
+            source_dir: 包含matbin文件的基础目录
+            target_name: 目标BND文件名称（不含扩展名）
+            
+        Returns:
+            生成的BND文件路径，失败时返回None
+        """
+        try:
+            from .witchybnd_processor import WitchyBNDProcessor
+            processor = WitchyBNDProcessor()
+            
+            # 检查源目录是否存在且包含文件
+            if not os.path.exists(source_dir):
+                logger.error(f"源目录不存在: {source_dir}")
+                return None
+                
+            files_in_dir = os.listdir(source_dir)
+            if not files_in_dir:
+                logger.warning(f"源目录为空: {source_dir}")
+                return None
+                
+            logger.info(f"准备打包基础目录: {source_dir}, 包含 {len(files_in_dir)} 个文件")
+            
+            # BND文件将生成在基础目录的父目录中
+            parent_dir = os.path.dirname(source_dir.rstrip(os.sep))
+            expected_bnd_file = os.path.join(parent_dir, f"{target_name}.bnd")
+            
+            # 如果目标BND文件已存在，先删除
+            if os.path.exists(expected_bnd_file):
+                os.remove(expected_bnd_file)
+                logger.info(f"删除已存在的BND文件: {expected_bnd_file}")
+            
+            # 使用WitchyBND重新打包整个基础目录
+            # WitchyBND会将目录打包成同名的BND文件
+            success, error = processor._run_witchy_drag_drop(source_dir)
+            
+            if success:
+                # 检查可能生成的BND文件位置
+                # WitchyBND根据目录名和配置可能生成不同格式的文件
+                base_name = os.path.basename(source_dir.rstrip(os.sep))
+                possible_bnd_files = [
+                    # 标准BND文件
+                    os.path.join(parent_dir, f"{target_name}.bnd"),
+                    os.path.join(parent_dir, f"{base_name}.bnd"),
+                    source_dir + ".bnd",
+                    # MATBINBND文件（可能有DCX压缩）
+                    os.path.join(parent_dir, f"{base_name.replace('-matbinbnd-dcx-wmatbinbnd', '')}.matbinbnd.dcx"),
+                    os.path.join(parent_dir, f"{base_name.replace('-matbinbnd-dcx-wmatbinbnd', '')}.matbinbnd"),
+                    os.path.join(parent_dir, f"{target_name}.matbinbnd.dcx"),
+                    os.path.join(parent_dir, f"{target_name}.matbinbnd"),
+                    # 其他可能的位置
+                    os.path.join(parent_dir, f"{base_name}.dcx"),
+                    source_dir + ".dcx"
+                ]
+                
+                for possible_file in possible_bnd_files:
+                    if os.path.exists(possible_file):
+                        file_size = os.path.getsize(possible_file)
+                        logger.info(f"封包文件创建成功: {possible_file} ({file_size} 字节)")
+                        return possible_file
+                
+                logger.warning("WitchyBND执行成功但未找到生成的封包文件")
+                logger.info(f"检查的位置: {possible_bnd_files}")
+                # 列出父目录的所有文件以帮助调试
+                try:
+                    all_files = os.listdir(parent_dir)
+                    logger.info(f"父目录 {parent_dir} 中的所有文件: {all_files}")
+                except Exception as e:
+                    logger.error(f"无法列出父目录文件: {e}")
+                return None
+            else:
+                logger.error(f"WitchyBND执行失败: {error}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"创建BND封包失败: {str(e)}")
+            import traceback
+            logger.error(f"错误详情: {traceback.format_exc()}")
+            return None
     
     def clear_autopack_dir(self):
         """清理autopack目录"""

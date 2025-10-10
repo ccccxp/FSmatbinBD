@@ -16,6 +16,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from src.gui.main_window import MaterialDatabaseApp
 from src.core.i18n import language_manager, _
+from src.utils.helpers import show_multilingual_okcancel
 
 def main():
     """主程序入口"""
@@ -35,7 +36,7 @@ def main():
         
         # 设置窗口关闭事件
         def on_closing():
-            if messagebox.askokcancel(_('menu_exit'), _('confirm_exit_message')):
+            if show_multilingual_okcancel(_('menu_exit'), _('confirm_exit_message')):
                 app.cleanup()
                 root.destroy()
         

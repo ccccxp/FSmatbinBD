@@ -10,6 +10,7 @@ import os
 import threading
 from typing import Dict, List
 from ..core.i18n import language_manager
+from ..utils.helpers import show_multilingual_confirmation
 
 def _(key: str, **kwargs) -> str:
     """获取翻译文本的辅助函数"""
@@ -158,10 +159,10 @@ class AutoPackDialog:
         
         # 更新统计信息
         stats = self.autopack_manager.get_statistics()
-        stats_text = _('total_with_without', total=stats['total_pending'], with_path=stats['with_target_path'], without_path=stats['without_target_path'])
+        stats_text = _('total_with_without').format(total=stats['total_pending'], with_path=stats['with_target_path'], without_path=stats['without_target_path'])
         self.stats_label.config(text=stats_text)
         
-        self.status_var.set(_('list_refreshed', count=len(pending_list)))
+        self.status_var.set(_('list_refreshed').format(count=len(pending_list)))
     
     def _set_target_path(self):
         """设置选中项的目标路径"""
@@ -187,7 +188,7 @@ class AutoPackDialog:
         # 刷新列表
         self._refresh_pending_list()
         
-        self.status_var.set(_('set_target_path_result', count=len(item_ids), path=target_path))
+        self.status_var.set(_('set_target_path_result').format(count=len(item_ids), path=target_path))
     
     def _remove_selected(self):
         """删除选中项"""
@@ -196,7 +197,7 @@ class AutoPackDialog:
             messagebox.showwarning(_('warning'), _('warning_select_delete'))
             return
         
-        if not messagebox.askyesno(_('warning'), _('confirm_delete', count=len(selected_items))):
+        if not show_multilingual_confirmation(_('warning'), _('confirm_delete').format(count=len(selected_items)), parent=self):
             return
         
         # 获取选中项的ID
@@ -211,11 +212,11 @@ class AutoPackDialog:
         # 刷新列表
         self._refresh_pending_list()
         
-        self.status_var.set(_('items_deleted', count=len(item_ids)))
+        self.status_var.set(_('items_deleted').format(count=len(item_ids)))
     
     def _clear_autopack_dir(self):
         """清理autopack目录"""
-        if not messagebox.askyesno(_('warning'), _('confirm_clear')):
+        if not show_multilingual_confirmation(_('warning'), _('confirm_clear'), parent=self):
             return
         
         try:
@@ -223,7 +224,7 @@ class AutoPackDialog:
             self.status_var.set(_('autopack_cleared'))
             messagebox.showinfo(_('clear_success'), _('clear_complete'))
         except Exception as e:
-            messagebox.showerror(_('error'), _('clear_error', error=str(e)))
+            messagebox.showerror(_('error'), _('clear_error').format(error=str(e)))
     
     def _execute_pack(self):
         """执行封包"""
@@ -233,7 +234,7 @@ class AutoPackDialog:
             return
         
         if not os.path.exists(base_dir):
-            messagebox.showerror(_('error'), _('error_base_dir_not_exist', path=base_dir))
+            messagebox.showerror(_('error'), _('error_base_dir_not_exist').format(path=base_dir))
             return
         
         # 检查是否有设置目标路径的项目
@@ -242,7 +243,7 @@ class AutoPackDialog:
             messagebox.showwarning(_('warning'), _('warning_no_target_path'))
             return
         
-        if not messagebox.askyesno(_('warning'), _('confirm_pack', count=stats['with_target_path'], dir=base_dir)):
+        if not show_multilingual_confirmation(_('warning'), _('confirm_pack').format(count=stats['with_target_path'], dir=base_dir), parent=self):
             return
         
         # 在后台线程中执行封包
@@ -268,15 +269,19 @@ class AutoPackDialog:
     
     def _pack_complete(self, result: Dict):
         """封包完成回调"""
+        # 添加调试信息
+        print(f"封包完成回调: success={result.get('success')}, packed_count={result.get('packed_count')}, failed_count={result.get('failed_count')}")
+        print(f"错误信息: {result.get('error', '无')}")
+        
         if result['success']:
-            message = _('pack_complete_detail', success=result['packed_count'], failed=result['failed_count'])
+            message = _('pack_complete_detail').format(success=result['packed_count'], failed=result['failed_count'])
             if result['failed_files']:
                 message += "\n\n" + _('failed_files') + ":\n" + "\n".join([f"- {f['filename']}: {f['error']}" for f in result['failed_files']])
             
             messagebox.showinfo(_('pack_complete'), message)
-            self.status_var.set(_('pack_complete_status', success=result['packed_count'], failed=result['failed_count']))
+            self.status_var.set(_('pack_complete_status').format(success=result['packed_count'], failed=result['failed_count']))
         else:
-            messagebox.showerror(_('pack_failed'), _('pack_error', error=result.get('error', _('unknown_error'))))
+            messagebox.showerror(_('pack_failed'), _('pack_error').format(error=result.get('error', _('unknown_error'))))
             self.status_var.set(_('pack_failed_status'))
         
         # 刷新列表
@@ -420,7 +425,7 @@ class DCXImportDialog:
             
         except Exception as e:
             # 如果拖放功能不可用，只记录日志但不影响正常使用
-            print(_('drag_drop_init_failed', error=str(e)))
+            print(_('drag_drop_init_failed').format(error=str(e)))
     
     def _select_dcx_file(self):
         """选择DCX文件"""

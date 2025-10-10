@@ -19,6 +19,7 @@ from src.core.xml_parser import MaterialXMLParser
 from src.core.i18n import language_manager, _
 from src.gui.library_panel import LibraryPanel
 from src.gui.material_list_panel import MaterialListPanel
+from src.utils.helpers import show_multilingual_confirmation, show_multilingual_okcancel
 
 logger = logging.getLogger(__name__)
 from src.gui.material_panel import MaterialPanel
@@ -395,7 +396,7 @@ class MaterialDatabaseApp:
     def _on_library_manage(self, action: str, library_id: int = None):
         """库管理事件处理"""
         if action == "delete" and library_id:
-            if messagebox.askyesno(_('confirm_delete_library'), _('confirm_delete_library_message')):
+            if show_multilingual_confirmation(_('confirm_delete_library'), _('confirm_delete_library_message'), parent=self):
                 try:
                     self.database.delete_library(library_id)
                     self._clear_cache()  # 清除缓存
@@ -559,7 +560,7 @@ class MaterialDatabaseApp:
             DCXImportDialog(self.root, self.database, on_import_complete)
             
         except Exception as e:
-            messagebox.showerror(_('error'), _('import_dcx_failed', error=str(e)))
+            messagebox.showerror(_('error'), _('import_dcx_failed').format(error=str(e)))
     
     def show_autopack_manager(self):
         """显示自动封包管理器"""
@@ -568,12 +569,12 @@ class MaterialDatabaseApp:
             
             def on_pack_complete(result):
                 if result['success']:
-                    self.status_text.set(_('autopack_complete_status', success=result['packed_count'], failed=result['failed_count']))
+                    self.status_text.set(_('autopack_complete_status').format(success=result['packed_count'], failed=result['failed_count']))
             
             AutoPackDialog(self.root, self.autopack_manager, on_pack_complete)
             
         except Exception as e:
-            messagebox.showerror(_('error'), _('open_autopack_failed', error=str(e)))
+            messagebox.showerror(_('error'), _('open_autopack_failed').format(error=str(e)))
     
     def export_current_material(self, add_to_autopack=None):
         """导出当前材质
@@ -607,7 +608,7 @@ class MaterialDatabaseApp:
                 should_add_to_autopack = add_to_autopack
                 if should_add_to_autopack is None:
                     # 如果没有指定，询问用户
-                    should_add_to_autopack = messagebox.askyesno(_('autopack_title'), _('ask_add_to_autopack'))
+                    should_add_to_autopack = show_multilingual_confirmation(_('autopack_title'), _('ask_add_to_autopack'), parent=self)
                 
                 if should_add_to_autopack:
                     try:
@@ -619,10 +620,10 @@ class MaterialDatabaseApp:
                         
                         # 添加到自动封包列表
                         matbin_file = self.autopack_manager.add_to_autopack(file_path, original_matbin)
-                        messagebox.showinfo(_('success'), _('added_to_autopack', filename=os.path.basename(matbin_file)))
+                        messagebox.showinfo(_('success'), _('added_to_autopack').format(filename=os.path.basename(matbin_file)))
                         
                     except Exception as e:
-                        messagebox.showerror(_('error'), _('add_to_autopack_failed', error=str(e)))
+                        messagebox.showerror(_('error'), _('add_to_autopack_failed').format(error=str(e)))
                 else:
                     messagebox.showinfo(_('success'), _('material_exported').format(path=file_path))
             else:

@@ -400,3 +400,265 @@ class ProgressTracker:
     def is_complete(self) -> bool:
         """是否完成"""
         return self.current >= self.total
+
+
+def show_multilingual_confirmation(title: str, message: str, parent=None) -> bool:
+    """
+    显示多语言确认对话框（是/否）- 黑暗主题版本
+    
+    Args:
+        title: 对话框标题
+        message: 对话框消息
+        parent: 父窗口
+        
+    Returns:
+        用户选择是否确认
+    """
+    import tkinter as tk
+    from tkinter import messagebox
+    
+    try:
+        # 尝试导入翻译函数
+        from ..core.i18n import _
+        from ..gui.theme import ModernDarkTheme
+        
+        # 创建自定义对话框
+        dialog = tk.Toplevel(parent)
+        dialog.title(title)
+        dialog.resizable(False, False)
+        dialog.grab_set()  # 模态对话框
+        
+        # 应用黑暗主题
+        dialog.configure(bg=ModernDarkTheme.COLORS['bg_primary'])
+        
+        # 设置对话框大小和居中
+        dialog.geometry("350x140")
+        if parent:
+            # 相对于父窗口居中
+            parent.update_idletasks()
+            x = parent.winfo_x() + (parent.winfo_width() // 2) - 175
+            y = parent.winfo_y() + (parent.winfo_height() // 2) - 70
+            dialog.geometry(f"350x140+{x}+{y}")
+        else:
+            # 屏幕居中
+            dialog.geometry("350x140+{}+{}".format(
+                dialog.winfo_screenwidth() // 2 - 175,
+                dialog.winfo_screenheight() // 2 - 70
+            ))
+        
+        result = [False]  # 使用列表以便在嵌套函数中修改
+        
+        # 消息标签
+        message_label = tk.Label(
+            dialog, 
+            text=message, 
+            wraplength=320, 
+            justify="left",
+            bg=ModernDarkTheme.COLORS['bg_primary'],
+            fg=ModernDarkTheme.COLORS['fg_primary'],
+            font=('Microsoft YaHei UI', 10)
+        )
+        message_label.pack(pady=(20, 15), padx=15)
+        
+        # 按钮框架
+        button_frame = tk.Frame(dialog, bg=ModernDarkTheme.COLORS['bg_primary'])
+        button_frame.pack(pady=(0, 15))
+        
+        def on_yes():
+            result[0] = True
+            dialog.destroy()
+            
+        def on_no():
+            result[0] = False
+            dialog.destroy()
+        
+        # 是 按钮（蓝色，表示确认）
+        yes_button = tk.Button(
+            button_frame, 
+            text=_('yes'), 
+            command=on_yes, 
+            width=8,
+            bg=ModernDarkTheme.COLORS['accent_blue'],
+            fg=ModernDarkTheme.COLORS['fg_primary'],
+            font=('Microsoft YaHei UI', 9),
+            relief='flat',
+            borderwidth=0,
+            cursor='hand2'
+        )
+        yes_button.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 否 按钮（灰色，表示取消）
+        no_button = tk.Button(
+            button_frame, 
+            text=_('no'), 
+            command=on_no, 
+            width=8,
+            bg=ModernDarkTheme.COLORS['bg_secondary'],
+            fg=ModernDarkTheme.COLORS['fg_primary'],
+            font=('Microsoft YaHei UI', 9),
+            relief='flat',
+            borderwidth=0,
+            cursor='hand2'
+        )
+        no_button.pack(side=tk.LEFT)
+        
+        # 按钮悬停效果
+        def on_yes_enter(e):
+            yes_button.config(bg='#0086d1')
+        def on_yes_leave(e):
+            yes_button.config(bg=ModernDarkTheme.COLORS['accent_blue'])
+        
+        def on_no_enter(e):
+            no_button.config(bg=ModernDarkTheme.COLORS['hover'])
+        def on_no_leave(e):
+            no_button.config(bg=ModernDarkTheme.COLORS['bg_secondary'])
+        
+        yes_button.bind('<Enter>', on_yes_enter)
+        yes_button.bind('<Leave>', on_yes_leave)
+        no_button.bind('<Enter>', on_no_enter)
+        no_button.bind('<Leave>', on_no_leave)
+        
+        # 设置默认焦点和回车键绑定
+        yes_button.focus_set()
+        dialog.bind('<Return>', lambda e: on_yes())
+        dialog.bind('<Escape>', lambda e: on_no())
+        
+        # 等待对话框关闭
+        dialog.wait_window()
+        
+        return result[0]
+        
+    except ImportError:
+        # 如果无法导入翻译函数，回退到系统对话框
+        return messagebox.askyesno(title, message, parent=parent)
+
+
+def show_multilingual_okcancel(title: str, message: str, parent=None) -> bool:
+    """
+    显示多语言确认对话框（确定/取消）- 黑暗主题版本
+    
+    Args:
+        title: 对话框标题
+        message: 对话框消息
+        parent: 父窗口
+        
+    Returns:
+        用户选择是否确认
+    """
+    import tkinter as tk
+    from tkinter import messagebox
+    
+    try:
+        # 尝试导入翻译函数
+        from ..core.i18n import _
+        from ..gui.theme import ModernDarkTheme
+        
+        # 创建自定义对话框
+        dialog = tk.Toplevel(parent)
+        dialog.title(title)
+        dialog.resizable(False, False)
+        dialog.grab_set()  # 模态对话框
+        
+        # 应用黑暗主题
+        dialog.configure(bg=ModernDarkTheme.COLORS['bg_primary'])
+        
+        # 设置对话框大小和居中
+        dialog.geometry("350x140")
+        if parent:
+            # 相对于父窗口居中
+            parent.update_idletasks()
+            x = parent.winfo_x() + (parent.winfo_width() // 2) - 175
+            y = parent.winfo_y() + (parent.winfo_height() // 2) - 70
+            dialog.geometry(f"350x140+{x}+{y}")
+        else:
+            # 屏幕居中
+            dialog.geometry("350x140+{}+{}".format(
+                dialog.winfo_screenwidth() // 2 - 175,
+                dialog.winfo_screenheight() // 2 - 70
+            ))
+        
+        result = [False]  # 使用列表以便在嵌套函数中修改
+        
+        # 消息标签
+        message_label = tk.Label(
+            dialog, 
+            text=message, 
+            wraplength=320, 
+            justify="left",
+            bg=ModernDarkTheme.COLORS['bg_primary'],
+            fg=ModernDarkTheme.COLORS['fg_primary'],
+            font=('Microsoft YaHei UI', 10)
+        )
+        message_label.pack(pady=(20, 15), padx=15)
+        
+        # 按钮框架
+        button_frame = tk.Frame(dialog, bg=ModernDarkTheme.COLORS['bg_primary'])
+        button_frame.pack(pady=(0, 15))
+        
+        def on_ok():
+            result[0] = True
+            dialog.destroy()
+            
+        def on_cancel():
+            result[0] = False
+            dialog.destroy()
+        
+        # 确定 按钮（绿色，表示成功操作）
+        ok_button = tk.Button(
+            button_frame, 
+            text=_('ok'), 
+            command=on_ok, 
+            width=8,
+            bg=ModernDarkTheme.COLORS['accent_green'],
+            fg=ModernDarkTheme.COLORS['fg_primary'],
+            font=('Microsoft YaHei UI', 9),
+            relief='flat',
+            borderwidth=0,
+            cursor='hand2'
+        )
+        ok_button.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 取消 按钮（红色，表示危险/取消操作）
+        cancel_button = tk.Button(
+            button_frame, 
+            text=_('cancel'), 
+            command=on_cancel, 
+            width=8,
+            bg=ModernDarkTheme.COLORS['accent_red'],
+            fg=ModernDarkTheme.COLORS['fg_primary'],
+            font=('Microsoft YaHei UI', 9),
+            relief='flat',
+            borderwidth=0,
+            cursor='hand2'
+        )
+        cancel_button.pack(side=tk.LEFT)
+        
+        # 按钮悬停效果
+        def on_ok_enter(e):
+            ok_button.config(bg='#1abc9c')
+        def on_ok_leave(e):
+            ok_button.config(bg=ModernDarkTheme.COLORS['accent_green'])
+        
+        def on_cancel_enter(e):
+            cancel_button.config(bg='#ec7063')
+        def on_cancel_leave(e):
+            cancel_button.config(bg=ModernDarkTheme.COLORS['accent_red'])
+        
+        ok_button.bind('<Enter>', on_ok_enter)
+        ok_button.bind('<Leave>', on_ok_leave)
+        cancel_button.bind('<Enter>', on_cancel_enter)
+        cancel_button.bind('<Leave>', on_cancel_leave)
+        
+        # 设置默认焦点和回车键绑定
+        ok_button.focus_set()
+        dialog.bind('<Return>', lambda e: on_ok())
+        dialog.bind('<Escape>', lambda e: on_cancel())
+        
+        # 等待对话框关闭
+        dialog.wait_window()
+        
+        return result[0]
+        
+    except ImportError:
+        # 如果无法导入翻译函数，回退到系统对话框
+        return messagebox.askokcancel(title, message, parent=parent)

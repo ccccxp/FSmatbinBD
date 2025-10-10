@@ -71,6 +71,7 @@ class LanguageManager:
             'added_to_autopack': '已添加到自动封包列表：\n{filename}',
             'add_to_autopack_failed': '添加到自动封包列表失败：{error}',
             'autopack_complete_status': '自动封包完成：成功 {success} 个，失败 {failed} 个',
+            'no_target_path_items': '没有指定封包路径的项目',
             'import_dcx_failed': '导入DCX材质库失败：{error}',
             'open_autopack_failed': '打开自动封包管理器失败：{error}',
             'import_mode_failed': '导入模式选择失败：{error}',
@@ -80,6 +81,7 @@ class LanguageManager:
             'menu_export': '导出XML',
             'menu_export_material': '导出当前材质',
             'menu_exit': '退出',
+            'confirm_exit_message': '确认退出应用程序？',
             'menu_edit': '编辑',
             'menu_tools': '工具',
             'menu_refresh': '刷新',
@@ -479,6 +481,7 @@ class LanguageManager:
             'added_to_autopack': 'Added to auto pack list:\n{filename}',
             'add_to_autopack_failed': 'Failed to add to auto pack list: {error}',
             'autopack_complete_status': 'Auto pack complete: success {success}, failed {failed}',
+            'no_target_path_items': 'No items with target paths specified',
             'import_dcx_failed': 'Failed to import DCX material library: {error}',
             'open_autopack_failed': 'Failed to open auto pack manager: {error}',
             'import_mode_failed': 'Import mode selection failed: {error}',
@@ -488,6 +491,7 @@ class LanguageManager:
             'menu_export': 'Export XML',
             'menu_export_material': 'Export Current Material',
             'menu_exit': 'Exit',
+            'confirm_exit_message': 'Are you sure you want to exit the application?',
             'menu_edit': 'Edit',
             'menu_tools': 'Tools',
             'menu_refresh': 'Refresh',
@@ -852,7 +856,6 @@ class LanguageManager:
                 'import_mode_folder': 'Import Folder',
                 'import_mode_dcx': 'Import DCX File',
                 'import_mode_xml': 'Import XML File',
-                'add_to_autopack': 'Auto-pack',
         }
     
     def _get_japanese_translations(self) -> Dict[str, str]:
@@ -1249,7 +1252,6 @@ class LanguageManager:
     'import_mode_folder': 'フォルダのインポート',
     'import_mode_dcx': 'DCXファイルのインポート',
     'import_mode_xml': 'XMLファイルのインポート',
-    'add_to_autopack': '自動パック',
         }
     
     def _get_korean_translations(self) -> Dict[str, str]:
@@ -1296,6 +1298,7 @@ class LanguageManager:
             'menu_export': 'XML 내보내기',
             'menu_export_material': '현재 재질 내보내기',
             'menu_exit': '종료',
+            'confirm_exit_message': '정말로 애플리케이션을 종료하시겠습니까?',
             'menu_edit': '편집',
             'menu_tools': '도구',
             'menu_refresh': '새로고침',
@@ -1648,7 +1651,6 @@ class LanguageManager:
             'import_mode_folder': '폴더 가져오기',
             'import_mode_dcx': 'DCX 파일 가져오기',
             'import_mode_xml': 'XML 파일 가져오기',
-            'add_to_autopack': '자동 패킹',
         }
     
     def get_text(self, key: str) -> str:
