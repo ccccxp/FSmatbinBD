@@ -53,14 +53,14 @@ class WitchyBNDProcessor:
         # 如果找不到，返回默认路径
         return "WitchyBND/WitchyBND.exe"
     
-    def _run_witchy_drag_drop(self, target_path: str, timeout: int = 60) -> Tuple[bool, str]:
+    def _run_witchy_drag_drop(self, target_path: str, timeout: int = 300) -> Tuple[bool, str]:
         """
         使用改进的方式执行WitchyBND模拟拖放操作
         参考批量解包工具的成功实现
         
         Args:
             target_path: 目标文件路径
-            timeout: 超时时间（秒）
+            timeout: 超时时间（秒）- 默认5分钟，大文件需要更长时间
             
         Returns:
             (成功标志, 错误信息)
@@ -354,7 +354,7 @@ class WitchyBNDProcessor:
         result_container = {'success': False, 'error': '', 'output_dir': ''}
         
         def thread_worker():
-            success, error = self._run_witchy_drag_drop(dcx_file)
+            success, error = self._run_witchy_drag_drop(dcx_file, timeout=300)  # 5分钟超时
             result_container['success'] = success
             result_container['error'] = error
             
@@ -411,7 +411,7 @@ class WitchyBNDProcessor:
         # 启动线程
         thread = threading.Thread(target=thread_worker)
         thread.start()
-        thread.join(timeout=90)  # 减少超时到1.5分钟
+        thread.join(timeout=300)  # 增加超时到5分钟，适应大文件处理
         
         if thread.is_alive():
             logger.error("解包操作超时")
@@ -488,14 +488,14 @@ class WitchyBNDProcessor:
         result_container = {'success': False, 'error': ''}
         
         def thread_worker():
-            success, error = self._run_witchy_drag_drop(matbin_file)
+            success, error = self._run_witchy_drag_drop(matbin_file, timeout=300)  # 5分钟超时
             result_container['success'] = success
             result_container['error'] = error
         
         # 启动线程
         thread = threading.Thread(target=thread_worker)
         thread.start()
-        thread.join(timeout=90)  # 减少超时到1.5分钟
+        thread.join(timeout=300)  # 增加超时到5分钟，适应大文件处理
         
         if thread.is_alive():
             logger.error("MATBIN转换线程超时")
@@ -558,14 +558,14 @@ class WitchyBNDProcessor:
         result_container = {'success': False, 'error': ''}
         
         def thread_worker():
-            success, error = self._run_witchy_drag_drop(xml_file)
+            success, error = self._run_witchy_drag_drop(xml_file, timeout=300)  # 5分钟超时
             result_container['success'] = success
             result_container['error'] = error
         
         # 启动线程
         thread = threading.Thread(target=thread_worker)
         thread.start()
-        thread.join(timeout=90)  # 减少超时到1.5分钟
+        thread.join(timeout=300)  # 增加超时到5分钟，适应大文件处理
         
         if thread.is_alive():
             logger.error("XML封包线程超时")

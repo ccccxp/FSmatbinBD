@@ -462,13 +462,13 @@ class MaterialDatabase:
                 final_params = []  # 重新创建参数列表，避免累积问题
                 for condition_type, type_data in conditions_by_type.items():
                     if type_data['conditions']:
-                        if match_mode == 'all' and condition_type == 'parameter':
-                            # 特殊处理：参数搜索在AND模式下
-                            # 因为多个参数条件针对的是不同的行，不能用AND连接
+                        if match_mode == 'all' and condition_type in ['parameter', 'sampler']:
+                            # 特殊处理：参数搜索和采样器搜索在AND模式下
+                            # 因为多个条件针对的是不同的行，不能用AND连接
                             # 使用OR获取所有候选材质，后处理会验证每个材质是否满足所有条件
                             type_condition = f"({' OR '.join(type_data['conditions'])})"
                         elif match_mode == 'all':
-                            # 其他类型：完全匹配模式使用AND连接
+                            # 其他类型（如材质名、着色器）：完全匹配模式使用AND连接
                             type_condition = f"({' AND '.join(type_data['conditions'])})"
                         else:
                             # 模糊匹配模式：同类型条件使用OR连接（任一条件匹配即可）
@@ -508,9 +508,9 @@ class MaterialDatabase:
                 
                 logger.debug(f"SQL查询返回结果数: {len(results)}")
                 
-                # 对需要后处理的参数搜索进行精确过滤
+                # 对需要后处理的搜索进行精确过滤
                 if search_criteria.get('conditions'):
-                    results = self._post_process_parameter_search(results, search_criteria['conditions'], match_mode)
+                    results = self._post_process_advanced_search(results, search_criteria['conditions'], match_mode)
                     logger.debug(f"后处理后结果数: {len(results)}")
                 
                 return results
@@ -518,6 +518,30 @@ class MaterialDatabase:
         except sqlite3.Error as e:
             logger.error(f"高级搜索失败: {str(e)}")
             return []
+
+    def _build_search_pattern(self, value: str, fuzzy: bool) -> str:
+        """
+        构建搜索模式
+        
+        Args:
+            value: 用户输入的搜索值
+            fuzzy: 是否启用模糊搜索
+            
+        Returns:
+            SQL LIKE 模式字符串
+        """
+        if not fuzzy:
+            # 精确匹配模式：不添加额外的通配符
+            return value
+        
+        # 模糊搜索模式：检查用户是否已经使用了通配符
+        if '*' in value or '%' in value or '_' in value:
+            # 用户已使用通配符，将*转换为%（SQL通配符）
+            pattern = value.replace('*', '%')
+            return pattern
+        else:
+            # 用户未使用通配符，默认在两端添加%进行包含匹配
+            return f"%{value}%"
 
     def _build_single_condition(self, condition: Dict[str, Any], fuzzy: bool) -> Dict[str, Any]:
         """构建单个搜索条件"""
@@ -530,8 +554,14 @@ class MaterialDatabase:
         has_sampler_details = bool(condition.get('sampler_details'))
         has_param_value = bool(condition.get('param_value', '').strip())
         
+        # 检查采样器指定搜索条件
+        has_specific_sampler = (
+            condition.get('specific_search') and 
+            (bool(condition.get('sampler_type', '').strip()) or bool(condition.get('sampler_path', '').strip()))
+        )
+        
         # 如果没有任何有效的搜索条件，返回空
-        if not (has_content or has_range or has_sampler_details or has_param_value):
+        if not (has_content or has_range or has_sampler_details or has_param_value or has_specific_sampler):
             return {}
         
         condition_parts = []
@@ -553,14 +583,18 @@ class MaterialDatabase:
             
             # 检查是否为指定搜索模式
             if condition.get('specific_search'):
-                # 指定搜索模式：精确匹配指定的类型和路径
+                # 指定搜索模式：支持模糊搜索和通配符
                 if condition.get('sampler_type') and condition['sampler_type'].strip():
+                    type_value = condition['sampler_type'].strip()
+                    type_pattern = self._build_search_pattern(type_value, fuzzy)
                     sampler_conditions.append("s.type LIKE ?")
-                    params.append(f"%{condition['sampler_type'].strip()}%")
+                    params.append(type_pattern)
                 
                 if condition.get('sampler_path') and condition['sampler_path'].strip():
+                    path_value = condition['sampler_path'].strip()
+                    path_pattern = self._build_search_pattern(path_value, fuzzy)
                     sampler_conditions.append("s.path LIKE ?")
-                    params.append(f"%{condition['sampler_path'].strip()}%")
+                    params.append(path_pattern)
             else:
                 # 常规搜索模式：在类型和路径中搜索关键词
                 if content:
@@ -1349,6 +1383,183 @@ class MaterialDatabase:
                             return True
                 except Exception:
                     continue
+        
+        return False
+    
+    def _post_process_advanced_search(self, results: List[Dict[str, Any]], 
+                                    conditions: List[Dict[str, Any]],
+                                    match_mode: str = 'any') -> List[Dict[str, Any]]:
+        """对高级搜索结果进行后处理，精确过滤参数和采样器条件
+        
+        Args:
+            results: SQL查询返回的结果列表
+            conditions: 搜索条件列表
+            match_mode: 匹配模式 - 'any'(OR逻辑) 或 'all'(AND逻辑)
+        """
+        if not results or not conditions:
+            return results
+        
+        # 找出需要后处理的条件
+        conditions_need_check = []
+        
+        for c in conditions:
+            condition_type = c.get('type')
+            
+            if condition_type == 'parameter':
+                # 参数搜索：有参数值搜索或范围搜索的需要后处理
+                if (c.get('param_value') and c.get('param_value').strip()) or c.get('range'):
+                    conditions_need_check.append(c)
+                elif match_mode == 'all':
+                    # AND模式下，只有参数名称搜索的也需要后处理
+                    conditions_need_check.append(c)
+            
+            elif condition_type == 'sampler' and match_mode == 'all':
+                # 采样器搜索：在AND模式下，多个采样器条件需要后处理
+                conditions_need_check.append(c)
+        
+        if not conditions_need_check:
+            # 没有需要后处理的条件，直接返回SQL结果
+            return results
+        
+        logger.debug(f"需要后处理的条件数: {len(conditions_need_check)}，匹配模式: {match_mode}")
+        
+        # 获取所有材质的详细信息进行精确过滤
+        filtered_results = []
+        
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                for result in results:
+                    material_id = result['id']
+                    
+                    # 根据匹配模式决定如何组合多个条件
+                    if match_mode == 'all':
+                        # AND逻辑：所有条件都必须满足
+                        should_include = True
+                        for condition in conditions_need_check:
+                            if condition.get('type') == 'parameter':
+                                if not self._check_material_parameter_condition(cursor, material_id, condition):
+                                    should_include = False
+                                    break
+                            elif condition.get('type') == 'sampler':
+                                if not self._check_material_sampler_condition(cursor, material_id, condition):
+                                    should_include = False
+                                    break
+                        
+                        if should_include:
+                            filtered_results.append(result)
+                    else:
+                        # OR逻辑：至少一个条件满足即可
+                        should_include = False
+                        for condition in conditions_need_check:
+                            if condition.get('type') == 'parameter':
+                                if self._check_material_parameter_condition(cursor, material_id, condition):
+                                    should_include = True
+                                    break
+                            elif condition.get('type') == 'sampler':
+                                if self._check_material_sampler_condition(cursor, material_id, condition):
+                                    should_include = True
+                                    break
+                        
+                        if should_include:
+                            filtered_results.append(result)
+        
+        except sqlite3.Error as e:
+            logger.error(f"后处理时数据库错误: {e}")
+            return results  # 如果后处理失败，返回原结果
+        
+        logger.debug(f"后处理前结果数: {len(results)}, 后处理后结果数: {len(filtered_results)}")
+        return filtered_results
+    
+    def _check_material_parameter_condition(self, cursor, material_id: int, condition: Dict[str, Any]) -> bool:
+        """检查材质是否满足参数条件"""
+        content = condition.get('content', '').strip()
+        param_value = condition.get('param_value', '').strip()
+        range_data = condition.get('range')
+        
+        # 参数名称检查
+        if content and not self._check_material_has_parameter_name(cursor, material_id, condition):
+            return False
+        
+        # 参数值检查
+        if param_value and not self._check_material_parameter_array_match(cursor, material_id, content, param_value):
+            return False
+        
+        # 范围检查
+        if range_data and not self._check_material_parameter_range(cursor, material_id, condition):
+            return False
+        
+        return True
+    
+    def _check_material_sampler_condition(self, cursor, material_id: int, condition: Dict[str, Any]) -> bool:
+        """检查材质是否满足采样器条件"""
+        content = condition.get('content', '').strip()
+        specific_search = condition.get('specific_search', False)
+        sampler_type = condition.get('sampler_type', '').strip()
+        sampler_path = condition.get('sampler_path', '').strip()
+        
+        # 查询材质的采样器信息
+        cursor.execute("""
+            SELECT type, path 
+            FROM material_samplers 
+            WHERE material_id = ?
+        """, (material_id,))
+        
+        samplers = cursor.fetchall()
+        if not samplers:
+            return False
+        
+        # 检查采样器条件
+        for sampler in samplers:
+            s_type = sampler[0] or ''
+            s_path = sampler[1] or ''
+            
+            if specific_search:
+                # 指定搜索模式
+                type_match = True
+                path_match = True
+                
+                if sampler_type:
+                    # 使用我们的模糊搜索模式
+                    pattern = self._build_search_pattern(sampler_type, True)
+                    if pattern.startswith('%') and pattern.endswith('%'):
+                        # 包含匹配
+                        type_match = sampler_type.replace('%', '').lower() in s_type.lower()
+                    elif pattern.endswith('%'):
+                        # 前缀匹配
+                        type_match = s_type.lower().startswith(sampler_type.replace('%', '').lower())
+                    elif pattern.startswith('%'):
+                        # 后缀匹配
+                        type_match = s_type.lower().endswith(sampler_type.replace('%', '').lower())
+                    else:
+                        # 精确匹配
+                        type_match = s_type.lower() == sampler_type.lower()
+                
+                if sampler_path:
+                    # 使用我们的模糊搜索模式
+                    pattern = self._build_search_pattern(sampler_path, True)
+                    if pattern.startswith('%') and pattern.endswith('%'):
+                        # 包含匹配
+                        path_match = sampler_path.replace('%', '').lower() in s_path.lower()
+                    elif pattern.endswith('%'):
+                        # 前缀匹配
+                        path_match = s_path.lower().startswith(sampler_path.replace('%', '').lower())
+                    elif pattern.startswith('%'):
+                        # 后缀匹配
+                        path_match = s_path.lower().endswith(sampler_path.replace('%', '').lower())
+                    else:
+                        # 精确匹配
+                        path_match = s_path.lower() == sampler_path.lower()
+                
+                if type_match and path_match:
+                    return True
+            else:
+                # 常规搜索模式：在类型和路径中搜索关键词
+                if content:
+                    if content.lower() in s_type.lower() or content.lower() in s_path.lower():
+                        return True
         
         return False
     

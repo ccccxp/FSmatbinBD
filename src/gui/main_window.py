@@ -987,15 +987,30 @@ class AdvancedSearchDialog:
         
         # 创建对话框
         self.dialog = tk.Toplevel(parent)
-        self.dialog.title(_('advanced_search_title'))
+        self.dialog.title(f"{_('advanced_search_title')} - {_('auxiliary_window')}")
         self.dialog.geometry("800x750")
         self.dialog.minsize(750, 600)
         self.dialog.transient(parent)
-        self.dialog.grab_set()
+        # self.dialog.grab_set()  # 移除模态设置，允许用户与主界面交互
         self.dialog.resizable(True, True)
         
-        # 居中显示
-        self.dialog.geometry("+%d+%d" % (parent.winfo_rootx() + 50, parent.winfo_rooty() + 50))
+        # 设置窗口位置：放在主窗口右侧，便于用户同时查看
+        parent.update_idletasks()
+        main_x = parent.winfo_x()
+        main_y = parent.winfo_y()
+        main_width = parent.winfo_width()
+        
+        # 将高级搜索窗口放在主窗口右侧
+        search_x = main_x + main_width + 10  # 主窗口右边加10像素间隔
+        search_y = main_y
+        
+        # 确保窗口不会超出屏幕边界
+        screen_width = self.dialog.winfo_screenwidth()
+        if search_x + 800 > screen_width:
+            # 如果右侧空间不够，放在主窗口左侧
+            search_x = max(0, main_x - 810)
+        
+        self.dialog.geometry(f"800x750+{search_x}+{search_y}")
         
         # 绑定关闭事件
         self.dialog.protocol("WM_DELETE_WINDOW", self._on_window_close)
@@ -1016,7 +1031,12 @@ class AdvancedSearchDialog:
         # 标题
         title_label = ttk.Label(main_frame, text=_('advanced_search_title'), 
                                font=('TkDefaultFont', 12, 'bold'))
-        title_label.pack(pady=(0, 10))
+        title_label.pack(pady=(0, 5))
+        
+        # 提示信息
+        hint_label = ttk.Label(main_frame, text=_('auxiliary_window_hint'), 
+                              font=('TkDefaultFont', 9), foreground='gray')
+        hint_label.pack(pady=(0, 10))
         
         # 搜索条件区域
         conditions_frame = ttk.LabelFrame(main_frame, text=_('search_conditions'), padding=10)
@@ -1162,12 +1182,20 @@ class AdvancedSearchDialog:
         
         # 采样器路径输入
         sampler_path_frame = ttk.Frame(sampler_frame)
-        sampler_path_frame.pack(fill=tk.X)
+        sampler_path_frame.pack(fill=tk.X, pady=(0, 5))
         
         ttk.Label(sampler_path_frame, text=_('sampler_path') + ":").pack(side=tk.LEFT, padx=(0, 5))
         sampler_path_var = tk.StringVar()
         sampler_path_entry = ttk.Entry(sampler_path_frame, textvariable=sampler_path_var, width=25)
         sampler_path_entry.pack(side=tk.LEFT)
+        
+        # 采样器搜索提示
+        sampler_help_frame = ttk.Frame(sampler_frame)
+        sampler_help_frame.pack(fill=tk.X, pady=(0, 5))
+        
+        sampler_help_label = ttk.Label(sampler_help_frame, text=_('sampler_search_help'), 
+                                      font=('TkDefaultFont', 8), foreground='gray')
+        sampler_help_label.pack(side=tk.LEFT, padx=(5, 0))
         
         # 参数搜索子选项
         param_frame = ttk.Frame(second_row)

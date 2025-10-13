@@ -102,6 +102,8 @@ class LanguageManager:
             
             # 高级搜索
             'advanced_search_title': '高级搜索',
+            'auxiliary_window': '辅助窗口',
+        'auxiliary_window_hint': '此窗口可与主界面同时使用',
             'search_conditions': '搜索条件',
             'search_type': '搜索类型',
             'search_content': '搜索内容',
@@ -112,6 +114,7 @@ class LanguageManager:
             'specific_search': '指定搜索',
             'sampler_type': '采样器类型',
             'sampler_path': '采样器路径',
+            'sampler_search_help': '支持通配符 * 或 % 进行模糊搜索，如 *MetallicMap 或 AAT100*',
             'parameter_value': '参数值',
             'parameter_value_help': '单个值：60 (包含60) | 多个值：1,0.9 (数组同时包含1和0.9)',
             'range_search': '范围搜索',
@@ -382,6 +385,7 @@ class LanguageManager:
             'key_label': '键名：',
             'ready': '就绪',
             'select_pack_base_dir': '选择封包基础目录',
+            'select_target_path': '选择目标路径',
             'total_with_without': '总计: {total} | 已设置路径: {with_path} | 未设置路径: {without_path}',
             'list_refreshed': '列表已刷新，共 {count} 项',
             'warning_select_items': '请先选择要设置路径的项目',
@@ -512,6 +516,8 @@ class LanguageManager:
             
             # 高级搜索
             'advanced_search_title': 'Advanced Search',
+            'auxiliary_window': 'Assistant Window',
+        'auxiliary_window_hint': 'This window can be used alongside the main interface',
             'search_conditions': 'Search Conditions',
             'search_type': 'Search Type',
             'search_content': 'Search Content',
@@ -522,6 +528,7 @@ class LanguageManager:
             'specific_search': 'Specific Search',
             'sampler_type': 'Sampler Type',
             'sampler_path': 'Sampler Path',
+            'sampler_search_help': 'Supports wildcards * or % for fuzzy search, e.g. *MetallicMap or AAT100*',
             'parameter_value': 'Parameter Value',
             'parameter_value_help': 'Single: 60 (contains 60) | Multiple: 1,0.9 (array contains both 1 and 0.9)',
             'range_search': 'Range Search',
@@ -787,6 +794,7 @@ class LanguageManager:
             'key_label': 'Key Name:',
             'ready': 'Ready',
             'select_pack_base_dir': 'Select Pack Base Directory',
+            'select_target_path': 'Select Target Path',
             'total_with_without': 'Total: {total} | With Path: {with_path} | Without Path: {without_path}',
             'list_refreshed': 'List refreshed, {count} items',
             'warning_select_items': 'Please select items to set path first',
@@ -922,6 +930,8 @@ class LanguageManager:
             
             # 高级搜索
             'advanced_search_title': '高度な検索',
+            'auxiliary_window': 'アシスタントウィンドウ',
+        'auxiliary_window_hint': 'このウィンドウはメインインターフェイスと同時に使用できます',
             'search_conditions': '検索条件',
             'search_type': '検索タイプ',
             'search_content': '検索内容',
@@ -981,6 +991,7 @@ class LanguageManager:
             'sequence_number': 'シーケンス番号',
             'sampler_type': 'サンプラータイプ',
             'sampler_path': 'サンプラーパス',
+            'sampler_search_help': 'ワイルドカード * または % でファジー検索をサポート、例：*MetallicMap または AAT100*',
             'unk14_x': 'unk14_x',
             'unk14_y': 'unk14_y',
             
@@ -1183,6 +1194,7 @@ class LanguageManager:
             'key_label': 'キー名:',
             'ready': '準備完了',
             'select_pack_base_dir': 'パック基本ディレクトリを選択',
+            'select_target_path': 'ターゲットパスを選択',
             'total_with_without': '合計: {total} | パス設定済み: {with_path} | 未設定: {without_path}',
             'list_refreshed': 'リストを更新しました。{count} 項目',
             'warning_select_items': 'パスを設定する項目を先に選択してください',
@@ -1319,6 +1331,8 @@ class LanguageManager:
             
             # 高级搜索
             'advanced_search_title': '고급 검색',
+            'auxiliary_window': '보조 창',
+        'auxiliary_window_hint': '이 창은 메인 인터페이스와 동시에 사용할 수 있습니다',
             'search_conditions': '검색 조건',
             'search_type': '검색 유형',
             'search_content': '검색 내용',
@@ -1378,6 +1392,7 @@ class LanguageManager:
             'sequence_number': '순서번호',
             'sampler_type': '샘플러 유형',
             'sampler_path': '샘플러 경로',
+            'sampler_search_help': '와일드카드 * 또는 % 로 퍼지 검색 지원, 예: *MetallicMap 또는 AAT100*',
             'unk14_x': 'unk14_x',
             'unk14_y': 'unk14_y',
             
@@ -1582,6 +1597,7 @@ class LanguageManager:
             'key_label': '키 이름:',
             'ready': '준비',
             'select_pack_base_dir': '패킹 기본 디렉토리 선택',
+            'select_target_path': '목표 경로 선택',
             'total_with_without': '합계: {total} | 경로 설정: {with_path} | 미설정: {without_path}',
             'list_refreshed': '목록 새로 고침, {count}개 항목',
             'warning_select_items': '먼저 경로를 설정할 항목을 선택하세요',

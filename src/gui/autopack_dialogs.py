@@ -103,6 +103,7 @@ class AutoPackDialog:
         self.target_path_var = tk.StringVar()
         path_entry = ttk.Entry(list_control_frame, textvariable=self.target_path_var, width=30)
         path_entry.pack(side=tk.LEFT, padx=(5, 5))
+        ttk.Button(list_control_frame, text=_('browse'), command=self._select_target_path).pack(side=tk.LEFT, padx=(0, 5))
         ttk.Button(list_control_frame, text=_('set_selected'), command=self._set_target_path).pack(side=tk.LEFT, padx=(0, 5))
         ttk.Button(list_control_frame, text=_('remove_selected'), command=self._remove_selected).pack(side=tk.LEFT)
         
@@ -163,6 +164,12 @@ class AutoPackDialog:
         self.stats_label.config(text=stats_text)
         
         self.status_var.set(_('list_refreshed').format(count=len(pending_list)))
+    
+    def _select_target_path(self):
+        """选择目标路径"""
+        directory = filedialog.askdirectory(title=_('select_target_path'))
+        if directory:
+            self.target_path_var.set(directory)
     
     def _set_target_path(self):
         """设置选中项的目标路径"""
