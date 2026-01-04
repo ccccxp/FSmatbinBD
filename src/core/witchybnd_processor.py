@@ -154,14 +154,19 @@ class WitchyBNDProcessor:
         
         # 可能的输出目录名称模式 - 修复版本，确保正确的模式优先
         # 对于 allmaterial.matbinbnd.dcx，实际输出是 allmaterial-matbinbnd-dcx-wmatbinbnd
-        base_name_no_extension = dcx_basename.split('.')[0]  # allmaterial
+        # 对于老版本 allmaterialbnd.mtdbnd.dcx，实际输出是 allmaterialbnd-mtdbnd-dcx-wmtdbnd
+        base_name_no_extension = dcx_basename.split('.')[0]  # allmaterial 或 allmaterialbnd
         
         possible_patterns = [
-            # 最常见的模式：filename-matbinbnd-dcx-wmatbinbnd
+            # 最常见的模式：filename-matbinbnd-dcx-wmatbinbnd (新版本)
             f"{base_name_no_extension}-matbinbnd-dcx-wmatbinbnd",  # allmaterial-matbinbnd-dcx-wmatbinbnd
+            # 老版本的模式：filename-mtdbnd-dcx-wmtdbnd
+            f"{base_name_no_extension}-mtdbnd-dcx-wmtdbnd",  # allmaterialbnd-mtdbnd-dcx-wmtdbnd
             # 其他可能的模式
             f"{dcx_basename_dash}-wmatbinbnd",
+            f"{dcx_basename_dash}-wmtdbnd",  # 老版本变体
             f"{dcx_basename_dash}-matbinbnd-dcx-wmatbinbnd", 
+            f"{dcx_basename_dash}-mtdbnd-dcx-wmtdbnd",  # 老版本变体
             f"{dcx_basename_dash}-witchy-bnd4",
             f"{dcx_basename_dash}_unpacked",
             f"{dcx_basename}-wmatbinbnd",  # 保留原格式作为备用
@@ -255,13 +260,15 @@ class WitchyBNDProcessor:
                 logger.info(f"智能搜索成功（最佳候选）: {best_candidate[0]}, MATBIN文件数: {best_candidate[1]}, 分数: {best_candidate[2]}")
                 return True, best_candidate[0], best_candidate[1]
                         
-            # 3. 最后尝试：任何包含matbin文件的新目录（即使没有关键词匹配）
+            # 3. 最后尝试：任何包含matbin/mtd文件的新目录（即使没有关键词匹配）
             matbin_dirs = []
             for item in new_dirs:
                 item_path = os.path.join(dcx_dir, item)
                 if os.path.isdir(item_path):
                     try:
-                        matbin_files = [f for f in os.listdir(item_path) if f.endswith('.matbin')]
+                        # 支持新版本的.matbin和老版本的.mtd文件
+                        matbin_files = [f for f in os.listdir(item_path) 
+                                       if f.endswith('.matbin') or f.endswith('.mtd')]
                         if len(matbin_files) > 0:
                             matbin_dirs.append((item_path, len(matbin_files)))
                     except OSError:
@@ -297,19 +304,20 @@ class WitchyBNDProcessor:
     
     def _count_matbin_files_recursive(self, directory: str) -> int:
         """
-        递归统计目录中的MATBIN文件数量
+        递归统计目录中的MATBIN/MTD文件数量
+        支持新版本的.matbin和老版本的.mtd文件
         
         Args:
             directory: 要搜索的目录
             
         Returns:
-            MATBIN文件总数
+            MATBIN/MTD文件总数
         """
         count = 0
         try:
             for root, dirs, files in os.walk(directory):
                 for file in files:
-                    if file.endswith('.matbin'):
+                    if file.endswith('.matbin') or file.endswith('.mtd'):
                         count += 1
         except OSError:
             pass
@@ -462,22 +470,25 @@ class WitchyBNDProcessor:
     
     def extract_matbin_to_xml(self, matbin_file: str, output_dir: str = None) -> str:
         """
-        使用模拟拖放方式将MATBIN文件转换为XML
+        使用模拟拖放方式将MATBIN/MTD文件转换为XML
+        支持新版本的.matbin和老版本的.mtd文件
         
         Args:
-            matbin_file: MATBIN文件路径
+            matbin_file: MATBIN/MTD文件路径
             output_dir: 输出目录（暂时忽略，使用默认输出位置）
             
         Returns:
             生成的XML文件路径
         """
         if not os.path.exists(matbin_file):
-            raise FileNotFoundError(f"MATBIN文件不存在: {matbin_file}")
+            raise FileNotFoundError(f"材质文件不存在: {matbin_file}")
         
         matbin_file = os.path.abspath(matbin_file)
         expected_xml = matbin_file + '.xml'
         
-        logger.info(f"开始模拟拖放转换MATBIN到XML: {matbin_file}")
+        # 判断文件类型用于日志
+        file_type = "MTD" if matbin_file.endswith('.mtd') else "MATBIN"
+        logger.info(f"开始模拟拖放转换{file_type}到XML: {matbin_file}")
         
         # 检查XML是否已存在
         if os.path.exists(expected_xml):
@@ -502,57 +513,69 @@ class WitchyBNDProcessor:
             raise RuntimeError("MATBIN转换操作超时")
         
         if not result_container['success']:
-            raise RuntimeError(f"模拟拖放MATBIN转换失败: {result_container['error']}")
+            raise RuntimeError(f"模拟拖放{file_type}转换失败: {result_container['error']}")
         
         # 等待并检查XML文件生成
         for i in range(10):  # 最多等待10秒
             time.sleep(1)
             if os.path.exists(expected_xml):
-                logger.info(f"模拟拖放MATBIN转换成功: {expected_xml}")
+                logger.info(f"模拟拖放{file_type}转换成功: {expected_xml}")
                 return expected_xml
         
-        raise RuntimeError(f"模拟拖放MATBIN转换完成，但未找到XML文件: {expected_xml}")
+        raise RuntimeError(f"模拟拖放{file_type}转换完成，但未找到XML文件: {expected_xml}")
     
     def pack_xml_to_matbin(self, xml_file: str, output_dir: str = None) -> str:
         """
-        使用模拟拖放方式将XML文件封包为MATBIN
+        使用模拟拖放方式将XML文件封包为MATBIN或MTD
         
         Args:
             xml_file: XML文件路径
             output_dir: 输出目录（暂时忽略，使用默认输出位置）
             
         Returns:
-            生成的.matbin文件路径
+            生成的.matbin或.mtd文件路径
         """
         if not os.path.exists(xml_file):
             raise FileNotFoundError(f"XML文件不存在: {xml_file}")
         
-        # 检查文件命名格式
+        # 检查文件命名格式 - 支持 .matbin.xml 和 .mtd.xml
         xml_filename = os.path.basename(xml_file)
-        if not xml_filename.endswith('.matbin.xml'):
+        is_matbin = xml_filename.endswith('.matbin.xml')
+        is_mtd = xml_filename.endswith('.mtd.xml')
+        
+        if not is_matbin and not is_mtd:
             raise ValueError(
                 f"XML文件命名格式错误: {xml_filename}\n\n"
-                f"正确的命名格式应该是: *.matbin.xml\n"
-                f"例如: C[c0010]_Arts_horn.matbin.xml\n\n"
+                f"正确的命名格式应该是:\n"
+                f"  - 艾尔登法环(新版本): *.matbin.xml\n"
+                f"  - 只狼(老版本): *.mtd.xml\n\n"
+                f"例如:\n"
+                f"  - C[c0010]_Arts_horn.matbin.xml (艾尔登法环)\n"
+                f"  - C[AMSN]_Cloth_Decal.mtd.xml (只狼)\n\n"
                 f"请将文件重命名为正确格式后再试。"
             )
         
         xml_file = os.path.abspath(xml_file)
-        # 生成的MATBIN文件通常与XML文件同名，但扩展名为.matbin
-        base_name = os.path.splitext(xml_file)[0]
-        if base_name.endswith('.matbin'):
-            # 如果原文件名已经包含.matbin，直接添加.matbin扩展名
-            expected_matbin = base_name
+        # 根据格式确定输出文件类型
+        base_name = os.path.splitext(xml_file)[0]  # 移除 .xml
+        
+        if is_matbin:
+            # .matbin.xml -> .matbin
+            expected_output = base_name  # base_name 已经是 xxx.matbin
+            file_type = "MATBIN"
+            output_ext = ".matbin"
         else:
-            # 如果原文件名不包含.matbin，则添加.matbin扩展名
-            expected_matbin = base_name + '.matbin'
+            # .mtd.xml -> .mtd
+            expected_output = base_name  # base_name 已经是 xxx.mtd
+            file_type = "MTD"
+            output_ext = ".mtd"
         
-        logger.info(f"开始模拟拖放转换XML到MATBIN: {xml_file}")
+        logger.info(f"开始模拟拖放转换XML到{file_type}: {xml_file}")
         
-        # 检查MATBIN是否已存在
-        if os.path.exists(expected_matbin):
-            logger.info(f"MATBIN文件已存在: {expected_matbin}")
-            return expected_matbin
+        # 检查输出文件是否已存在
+        if os.path.exists(expected_output):
+            logger.info(f"{file_type}文件已存在: {expected_output}")
+            return expected_output
         
         # 使用多线程执行模拟拖放
         result_container = {'success': False, 'error': ''}
@@ -568,8 +591,8 @@ class WitchyBNDProcessor:
         thread.join(timeout=300)  # 增加超时到5分钟，适应大文件处理
         
         if thread.is_alive():
-            logger.error("XML封包线程超时")
-            raise RuntimeError("XML封包操作超时")
+            logger.error(f"XML封包线程超时")
+            raise RuntimeError(f"XML封包操作超时")
         
         if not result_container['success']:
             error_msg = result_container['error']
@@ -577,66 +600,67 @@ class WitchyBNDProcessor:
             detailed_error = (
                 f"模拟拖放XML封包失败: {error_msg}\n\n"
                 f"请检查以下几点:\n"
-                f"1. XML文件命名格式是否正确 (*.matbin.xml)\n"
+                f"1. XML文件命名格式是否正确 (*{output_ext}.xml)\n"
                 f"   当前文件: {xml_filename}\n"
-                f"   正确格式: C[c0010]_Arts_horn.matbin.xml\n\n"
-                f"2. XML文件内容是否符合MATBIN格式\n"
+                f"2. XML文件内容是否符合{file_type}格式\n"
                 f"3. WitchyBND工具是否正常工作\n"
                 f"4. 文件路径中是否包含特殊字符"
             )
             raise RuntimeError(detailed_error)
         
-        # 等待并检查MATBIN文件生成
+        # 等待并检查输出文件生成
         for i in range(10):  # 最多等待10秒
             time.sleep(1)
-            if os.path.exists(expected_matbin):
-                logger.info(f"模拟拖放XML封包成功: {expected_matbin}")
-                return expected_matbin
+            if os.path.exists(expected_output):
+                logger.info(f"模拟拖放XML封包成功: {expected_output}")
+                return expected_output
         
-        # 如果预期位置没有找到，尝试在同目录下查找相关的MATBIN文件
+        # 如果预期位置没有找到，尝试在同目录下查找相关的输出文件
         xml_dir = os.path.dirname(xml_file)
         xml_basename = os.path.splitext(os.path.basename(xml_file))[0]
         
         for file in os.listdir(xml_dir):
-            if file.endswith('.matbin') and xml_basename in file:
-                matbin_file = os.path.join(xml_dir, file)
-                logger.info(f"找到生成的MATBIN文件: {matbin_file}")
-                return matbin_file
+            if file.endswith(output_ext) and xml_basename in file:
+                output_file = os.path.join(xml_dir, file)
+                logger.info(f"找到生成的{file_type}文件: {output_file}")
+                return output_file
         
         # 提供详细的失败信息
         raise RuntimeError(
-            f"模拟拖放XML封包完成，但未找到MATBIN文件\n\n"
-            f"预期文件位置: {expected_matbin}\n"
+            f"模拟拖放XML封包完成，但未找到{file_type}文件\n\n"
+            f"预期文件位置: {expected_output}\n"
             f"请检查:\n"
             f"1. XML文件命名格式: {xml_filename}\n"
-            f"2. 是否应该命名为: *.matbin.xml 格式\n"
+            f"2. 是否应该命名为: *{output_ext}.xml 格式\n"
             f"3. WitchyBND是否成功处理了文件"
         )
     
     def batch_extract_matbins(self, directory: str, preserve_structure: bool = True) -> List[str]:
         """
-        批量多线程解包目录中的所有.matbin文件
+        批量多线程解包目录中的所有.matbin/.mtd文件
+        支持新版本的.matbin和老版本的.mtd文件
         
         Args:
-            directory: 包含.matbin文件的目录
+            directory: 包含.matbin/.mtd文件的目录
             preserve_structure: 是否保持目录结构
             
         Returns:
             生成的XML文件列表
         """
-        # 收集所有MATBIN文件
+        # 收集所有MATBIN/MTD文件
         matbin_files = []
         for root, dirs, files in os.walk(directory):
             for file in files:
-                if file.endswith('.matbin'):
+                # 支持新版本的.matbin和老版本的.mtd文件
+                if file.endswith('.matbin') or file.endswith('.mtd'):
                     matbin_path = os.path.join(root, file)
                     matbin_files.append(matbin_path)
         
         if not matbin_files:
-            logger.warning(f"在目录 {directory} 中未找到MATBIN文件")
+            logger.warning(f"在目录 {directory} 中未找到MATBIN/MTD文件")
             return []
         
-        logger.info(f"发现 {len(matbin_files)} 个MATBIN文件，开始多线程批量转换...")
+        logger.info(f"发现 {len(matbin_files)} 个材质文件(.matbin/.mtd)，开始多线程批量转换...")
         
         # 使用多线程批处理方法
         def progress_callback(current, total, filename, status):
@@ -894,13 +918,13 @@ class MaterialLibraryImporter:
             logger.info(f"开始解包DCX文件: {dcx_file}")
             extracted_dir = self.processor.extract_dcx(dcx_file)
             
-            # 2. 批量转换.matbin为XML
-            logger.info(f"开始批量转换MATBIN文件: {extracted_dir}")
+            # 2. 批量转换.matbin/.mtd为XML
+            logger.info(f"开始批量转换材质文件(.matbin/.mtd): {extracted_dir}")
             xml_files = self.processor.batch_extract_matbins(extracted_dir)
             result['xml_files'] = xml_files
             
             if not xml_files:
-                raise RuntimeError("未找到可转换的.matbin文件")
+                raise RuntimeError("未找到可转换的材质文件(.matbin/.mtd)")
             
             # 3. 创建材质库
             library_id = self.database.create_library(

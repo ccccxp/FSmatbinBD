@@ -113,6 +113,9 @@ class MaterialDatabase:
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_params_material_sort ON material_params(material_id, sort_order)')
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_samplers_material_sort ON material_samplers(material_id, sort_order)')
                 
+                # 搜索优化索引
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_materials_shader ON materials(shader_path)')
+                
                 conn.commit()
                 logger.info("数据库初始化完成")
                 
@@ -141,6 +144,26 @@ class MaterialDatabase:
         except sqlite3.Error as e:
             logger.error(f"创建材质库失败: {str(e)}")
             raise
+
+    # ===== compatibility aliases (for older UI / Qt UI) =====
+    def add_library(self, name: str, source_path: str, description: str = "") -> int:
+        """兼容旧接口：新增材质库。
+
+        旧UI/部分脚本使用 add_library(name, path)。这里映射到 create_library。
+        """
+        return self.create_library(name=name, description=description, source_path=source_path)
+
+    def remove_library(self, library_id: int):
+        """兼容旧接口：删除材质库。"""
+        return self.delete_library(library_id)
+
+    def rescan_library(self, library_id: int):
+        """兼容旧接口：重新扫描材质库。
+
+        当前重构版数据库未内置扫描逻辑（扫描通常在导入阶段由上层完成）。
+        这里保留占位，供Qt库管理弹窗调用；后续可接入实际扫描实现。
+        """
+        raise NotImplementedError("rescan_library 尚未接入扫描实现")
     
     def get_libraries(self) -> List[Dict[str, Any]]:
         """获取所有材质库"""
@@ -176,8 +199,14 @@ class MaterialDatabase:
             logger.error(f"获取材质数量失败: {str(e)}")
             return 0
     
-    def update_library(self, library_id: int, name: str = None, description: str = None):
-        """更新材质库信息"""
+    def update_library(
+        self,
+        library_id: int,
+        name: str = None,
+        description: str = None,
+        source_path: str = None,
+    ):
+        """更新材质库信息（支持更新 source_path）。"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
@@ -192,6 +221,10 @@ class MaterialDatabase:
                 if description is not None:
                     updates.append("description = ?")
                     params.append(description)
+
+                if source_path is not None:
+                    updates.append("source_path = ?")
+                    params.append(source_path)
                 
                 if updates:
                     updates.append("updated_time = CURRENT_TIMESTAMP")
@@ -1562,6 +1595,158 @@ class MaterialDatabase:
                         return True
         
         return False
+    
+    def search_materials_by_name(self, material_name: str, library_id: int = None) -> List[Dict[str, Any]]:
+        """根据材质名称搜索材质"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                if library_id:
+                    query = '''
+                        SELECT m.*, ml.name as library_name 
+                        FROM materials m 
+                        LEFT JOIN material_libraries ml ON m.library_id = ml.id 
+                        WHERE m.filename LIKE ? AND m.library_id = ?
+                        ORDER BY m.filename
+                    '''
+                    cursor.execute(query, (f'%{material_name}%', library_id))
+                else:
+                    query = '''
+                        SELECT m.*, ml.name as library_name 
+                        FROM materials m 
+                        LEFT JOIN material_libraries ml ON m.library_id = ml.id 
+                        WHERE m.filename LIKE ?
+                        ORDER BY m.filename
+                    '''
+                    cursor.execute(query, (f'%{material_name}%',))
+                
+                columns = [description[0] for description in cursor.description]
+                results = []
+                for row in cursor.fetchall():
+                    material = dict(zip(columns, row))
+                    results.append(material)
+                
+                return results
+                
+        except sqlite3.Error as e:
+            logger.error(f"搜索材质时发生数据库错误: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"搜索材质时发生错误: {e}")
+            return []
+    
+    def get_material_by_id(self, material_id: int) -> Optional[Dict[str, Any]]:
+        """根据ID获取单个材质"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                query = '''
+                    SELECT m.*, ml.name as library_name 
+                    FROM materials m 
+                    LEFT JOIN material_libraries ml ON m.library_id = ml.id 
+                    WHERE m.id = ?
+                '''
+                cursor.execute(query, (material_id,))
+                
+                row = cursor.fetchone()
+                if row:
+                    columns = [description[0] for description in cursor.description]
+                    return dict(zip(columns, row))
+                
+                return None
+                
+        except sqlite3.Error as e:
+            logger.error(f"获取材质时发生数据库错误: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"获取材质时发生错误: {e}")
+            return None
+    
+    def get_materials_by_library(self, library_id: int) -> List[Dict[str, Any]]:
+        """获取指定库中的所有材质"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                query = '''
+                    SELECT m.*, ml.name as library_name 
+                    FROM materials m 
+                    LEFT JOIN material_libraries ml ON m.library_id = ml.id 
+                    WHERE m.library_id = ?
+                    ORDER BY m.file_name
+                '''
+                cursor.execute(query, (library_id,))
+                
+                rows = cursor.fetchall()
+                columns = [description[0] for description in cursor.description]
+                
+                materials = []
+                for row in rows:
+                    material = dict(zip(columns, row))
+                    # 添加material的name字段，用于匹配算法
+                    material['name'] = material.get('file_name', '')
+                    materials.append(material)
+                
+                return materials
+                
+        except sqlite3.Error as e:
+            logger.error(f"获取库材质时发生数据库错误: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"获取库材质时发生错误: {e}")
+            return []
+    
+    def get_samplers(self, material_id: int) -> List[Dict[str, Any]]:
+        """获取材质的采样器信息"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                query = '''
+                    SELECT * FROM material_samplers 
+                    WHERE material_id = ?
+                    ORDER BY sort_order, id
+                '''
+                cursor.execute(query, (material_id,))
+                
+                rows = cursor.fetchall()
+                columns = [description[0] for description in cursor.description]
+                
+                return [dict(zip(columns, row)) for row in rows]
+                
+        except sqlite3.Error as e:
+            logger.error(f"获取采样器时发生数据库错误: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"获取采样器时发生错误: {e}")
+            return []
+    
+    def get_parameters(self, material_id: int) -> List[Dict[str, Any]]:
+        """获取材质的参数信息"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                query = '''
+                    SELECT * FROM material_params 
+                    WHERE material_id = ?
+                    ORDER BY sort_order, id
+                '''
+                cursor.execute(query, (material_id,))
+                
+                rows = cursor.fetchall()
+                columns = [description[0] for description in cursor.description]
+                
+                return [dict(zip(columns, row)) for row in rows]
+                
+        except sqlite3.Error as e:
+            logger.error(f"获取参数时发生数据库错误: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"获取参数时发生错误: {e}")
+            return []
     
     def close(self):
         """关闭数据库连接"""

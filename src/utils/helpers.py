@@ -422,8 +422,24 @@ def show_multilingual_confirmation(title: str, message: str, parent=None) -> boo
         from ..core.i18n import _
         from ..gui.theme import ModernDarkTheme
         
+        # 智能处理父窗口
+        actual_parent = None
+        if parent is not None:
+            if hasattr(parent, 'tk'):
+                # 标准的Tkinter窗口
+                actual_parent = parent
+            elif hasattr(parent, 'dialog') and hasattr(parent.dialog, 'tk'):
+                # 自定义对话框类，有dialog属性
+                actual_parent = parent.dialog
+            elif hasattr(parent, 'root') and hasattr(parent.root, 'tk'):
+                # 有root属性的类
+                actual_parent = parent.root
+            else:
+                # 回退到None，使用屏幕居中
+                actual_parent = None
+        
         # 创建自定义对话框
-        dialog = tk.Toplevel(parent)
+        dialog = tk.Toplevel(actual_parent)
         dialog.title(title)
         dialog.resizable(False, False)
         dialog.grab_set()  # 模态对话框
@@ -433,11 +449,11 @@ def show_multilingual_confirmation(title: str, message: str, parent=None) -> boo
         
         # 设置对话框大小和居中
         dialog.geometry("350x140")
-        if parent:
+        if actual_parent:
             # 相对于父窗口居中
-            parent.update_idletasks()
-            x = parent.winfo_x() + (parent.winfo_width() // 2) - 175
-            y = parent.winfo_y() + (parent.winfo_height() // 2) - 70
+            actual_parent.update_idletasks()
+            x = actual_parent.winfo_x() + (actual_parent.winfo_width() // 2) - 175
+            y = actual_parent.winfo_y() + (actual_parent.winfo_height() // 2) - 70
             dialog.geometry(f"350x140+{x}+{y}")
         else:
             # 屏幕居中
@@ -553,8 +569,24 @@ def show_multilingual_okcancel(title: str, message: str, parent=None) -> bool:
         from ..core.i18n import _
         from ..gui.theme import ModernDarkTheme
         
+        # 智能处理父窗口
+        actual_parent = None
+        if parent is not None:
+            if hasattr(parent, 'tk'):
+                # 标准的Tkinter窗口
+                actual_parent = parent
+            elif hasattr(parent, 'dialog') and hasattr(parent.dialog, 'tk'):
+                # 自定义对话框类，有dialog属性
+                actual_parent = parent.dialog
+            elif hasattr(parent, 'root') and hasattr(parent.root, 'tk'):
+                # 有root属性的类
+                actual_parent = parent.root
+            else:
+                # 回退到None，使用屏幕居中
+                actual_parent = None
+        
         # 创建自定义对话框
-        dialog = tk.Toplevel(parent)
+        dialog = tk.Toplevel(actual_parent)
         dialog.title(title)
         dialog.resizable(False, False)
         dialog.grab_set()  # 模态对话框
@@ -564,11 +596,11 @@ def show_multilingual_okcancel(title: str, message: str, parent=None) -> bool:
         
         # 设置对话框大小和居中
         dialog.geometry("350x140")
-        if parent:
+        if actual_parent:
             # 相对于父窗口居中
-            parent.update_idletasks()
-            x = parent.winfo_x() + (parent.winfo_width() // 2) - 175
-            y = parent.winfo_y() + (parent.winfo_height() // 2) - 70
+            actual_parent.update_idletasks()
+            x = actual_parent.winfo_x() + (actual_parent.winfo_width() // 2) - 175
+            y = actual_parent.winfo_y() + (actual_parent.winfo_height() // 2) - 70
             dialog.geometry(f"350x140+{x}+{y}")
         else:
             # 屏幕居中
@@ -587,7 +619,7 @@ def show_multilingual_okcancel(title: str, message: str, parent=None) -> bool:
             justify="left",
             bg=ModernDarkTheme.COLORS['bg_primary'],
             fg=ModernDarkTheme.COLORS['fg_primary'],
-            font=('Microsoft YaHei UI', 10)
+            font=('Segoe UI', 10)
         )
         message_label.pack(pady=(20, 15), padx=15)
         
@@ -609,9 +641,9 @@ def show_multilingual_okcancel(title: str, message: str, parent=None) -> bool:
             text=_('ok'), 
             command=on_ok, 
             width=8,
-            bg=ModernDarkTheme.COLORS['accent_green'],
-            fg=ModernDarkTheme.COLORS['fg_primary'],
-            font=('Microsoft YaHei UI', 9),
+            bg=ModernDarkTheme.COLORS['success'],
+            fg='#ffffff',
+            font=('Segoe UI', 9),
             relief='flat',
             borderwidth=0,
             cursor='hand2'
@@ -624,9 +656,9 @@ def show_multilingual_okcancel(title: str, message: str, parent=None) -> bool:
             text=_('cancel'), 
             command=on_cancel, 
             width=8,
-            bg=ModernDarkTheme.COLORS['accent_red'],
-            fg=ModernDarkTheme.COLORS['fg_primary'],
-            font=('Microsoft YaHei UI', 9),
+            bg=ModernDarkTheme.COLORS['danger'],
+            fg='#ffffff',
+            font=('Segoe UI', 9),
             relief='flat',
             borderwidth=0,
             cursor='hand2'
@@ -635,14 +667,14 @@ def show_multilingual_okcancel(title: str, message: str, parent=None) -> bool:
         
         # 按钮悬停效果
         def on_ok_enter(e):
-            ok_button.config(bg='#1abc9c')
+            ok_button.config(bg='#2ea043')
         def on_ok_leave(e):
-            ok_button.config(bg=ModernDarkTheme.COLORS['accent_green'])
+            ok_button.config(bg=ModernDarkTheme.COLORS['success'])
         
         def on_cancel_enter(e):
-            cancel_button.config(bg='#ec7063')
+            cancel_button.config(bg='#ff4d4d')
         def on_cancel_leave(e):
-            cancel_button.config(bg=ModernDarkTheme.COLORS['accent_red'])
+            cancel_button.config(bg=ModernDarkTheme.COLORS['danger'])
         
         ok_button.bind('<Enter>', on_ok_enter)
         ok_button.bind('<Leave>', on_ok_leave)

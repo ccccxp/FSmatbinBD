@@ -1,82 +1,81 @@
-# FSmatbinBD V1.1 - 3D Material Library Query & Management System
+# FSmatbinBD V1.1 - 3D材质库查询管理系统
 
-A Python-based 3D material library query and management tool designed for ER/NR game, supporting material data querying, importing, exporting, and batch processing.
+一个基于Python的3D材质库查询和管理工具，专为游戏开发者和3D艺术家设计，支持材质数据的查询、导入、导出和批量处理。
 
-## 🚀 Core Features
+## 🚀 核心功能
 
-- **🔍 Smart Material Search**: Quickly find and browse material resources in the library
-- **📊 Visual Material Preview**: Intuitive display of material properties and parameter information
-- **📁 Batch File Processing**: Support for batch import and export of material files
-- **📦 BND Batch Extraction**: Efficient batch extraction based on WitchyBND
-- **🗄️ Database Management**: SQLite database storage with backup and recovery support
-- **🌐 Bilingual Interface**: Complete Chinese and English interface support
-- **🎨 Modern UI**: Clean and user-friendly graphical interface design
+- **🔍 智能材质搜索**: 快速查找和浏览材质库中的材质资源
+- **📊 可视化材质预览**: 直观显示材质属性和参数信息
+- **📁 批量文件处理**: 支持材质文件的批量导入和导出
+- **📦 BND文件批量解压**: 基于WitchyBND的高效批量解压功能
+- **�️ 数据库管理**: SQLite数据库存储，支持备份和恢复
+- **🌐 双语界面**: 完整的中英文界面支持
+- **🎨 现代化UI**: 清晰易用的图形界面设计
 
-## 📋 System Requirements
+## 📋 使用要求
 
 - **Python 3.7+**
-- **Operating System**: Windows 10/11 (Recommended)
-- **Memory**: 4GB+ RAM recommended
-- **Storage**: At least 1GB available space
+- **操作系统**: Windows 10/11 (推荐)
+- **内存**: 建议4GB以上RAM
+- **存储空间**: 至少1GB可用空间
 
-## 🛠️ Installation & Usage
+## 🛠️ 安装和使用
 
-### Quick Start
+### 快速启动
 
-1. **Download the project** and extract to local directory
-2. **Double-click to run** one of the following files:
-   - `FSmatbinDB.bat` (Windows Batch)
-   - `start_matbin_library.ps1` (PowerShell Script)
-   - Or directly run `python main.py`
+1. **下载项目**并解压到本地目录
+2. **双击运行**以下文件之一：
+   - `FSmatbinBD.bat` (Windows批处理)
+   - `start_matbin_library.ps1` (PowerShell脚本)
+   - 或直接运行 `python main.py`
 
-### Basic Operations
+### 基本操作
 
-1. **Launch Program**: Run the startup files above and wait for interface to load
-2. **Browse Materials**: Browse imported material library in the main interface
-3. **Search Materials**: Use search box to quickly locate specific materials
-4. **Import Materials**: Click import button to select and batch import material files
-5. **Export Data**: Export selected material data to desired format
+1. **启动程序**: 运行上述启动文件，等待界面加载
+2. **浏览材质**: 在主界面中浏览已导入的材质库
+3. **搜索材质**: 使用搜索框快速定位特定材质
+4. **导入材质**: 点击导入按钮，选择材质文件进行批量导入
+5. **导出数据**: 将选中的材质数据导出为所需格式
 
-## ⚠️ Important Notes
+## ⚠️ 重要注意事项
 
-### WitchyBND Tool Configuration
+### WitchyBND工具配置
 
-**Batch extraction functionality depends on the WitchyBND tool**. Before use, please:
+**批量解压功能依赖于WitchyBND工具**，使用前请：
 
-1. **Download WitchyBND**: Visit [WitchyBND Official Repository](https://github.com/ividyon/WitchyBND)
-2. **Placement**: Place the downloaded WitchyBND.exe file in the project's `tools/WitchyBND/` folder
-3. **Verify Installation**: Ensure `tools/WitchyBND/WitchyBND.exe` file exists and is executable
+1. **下载WitchyBND**: 访问 [WitchyBND官方仓库](https://github.com/ividyon/WitchyBND)
+2. **放置位置**: 将下载的WitchyBND.exe文件放置在项目的 `tools/WitchyBND/` 文件夹下
+3. **验证安装**: 确保 `tools/WitchyBND/WitchyBND.exe` 文件存在且可执行
 
-### Usage Reminders
+### 使用提醒
 
-- **Data Backup**: Regularly backup the database file (`data/databases/materials.db`)
-- **File Paths**: Avoid using file paths with special characters
-- **Memory Usage**: Processing large batches may consume significant memory; consider closing unnecessary applications
-- **Permissions**: Some operations may require administrator privileges
+- **数据备份**: 建议定期备份数据库文件 (`data/databases/materials.db`)
+- **文件路径**: 避免使用包含特殊字符的文件路径
+- **内存使用**: 处理大批量文件时可能消耗较多内存，建议关闭其他不必要的应用程序
+- **权限要求**: 某些操作可能需要管理员权限
 
-## 🎯 Main Interface Guide
+## 🎯 主要界面说明
 
-- **Material List Panel**: Displays all imported materials with sorting and filtering support
-- **Material Details Panel**: View detailed information and parameters of selected materials
-- **Sampler Panel**: Manage and configure material samplers
-- **Tools Panel**: Provides batch operations and data management functions
+- **材质列表面板**: 显示所有已导入的材质，支持排序和筛选
+- **材质详情面板**: 查看选中材质的详细信息和参数
+- **采样器面板**: 管理和配置材质采样器
+- **工具面板**: 提供批量操作和数据管理功能
 
-## 🙏 Acknowledgments
+## 🙏 致谢
 
-The batch extraction functionality of this project is based on the excellent open-source project **WitchyBND**. Special thanks to:
+本项目的批量解压功能基于优秀的开源项目 **WitchyBND**，特别感谢：
 
-- **WitchyBND Project**: [https://github.com/ividyon/WitchyBND](https://github.com/ividyon/WitchyBND)
-- **Author**: ividyon
+- **WitchyBND项目**: [https://github.com/ividyon/WitchyBND](https://github.com/ividyon/WitchyBND)
+- **作者**: ividyon
 
-## 📞 Support & Feedback
+## 📞 支持与反馈
 
-If you encounter issues or have suggestions for improvement, please contact us through:
+如遇到问题或有改进建议，请通过以下方式联系：
 
-- **GitHub Issues**: Submit issue reports in this repository
-- **Feature Requests**: Welcome to propose new feature requirements
-- **Bug Reports**: Please provide detailed steps to reproduce the issue
+- **GitHub Issues**: 在本仓库提交问题报告
+- **功能建议**: 欢迎提出新功能需求
+- **Bug报告**: 详细描述问题复现步骤
 
 ---
 
-
-**Note**: This software is an open-source project for educational and research purposes only. Please comply with relevant laws and regulations during use.
+**注意**: 本软件为开源项目，仅供学习和研究使用。使用过程中请遵守相关法律法规。

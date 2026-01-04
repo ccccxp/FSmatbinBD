@@ -56,6 +56,7 @@ class MaterialXMLParser:
     def parse_file(self, file_path: str) -> Optional[Dict[str, Any]]:
         """
         解析单个XML材质文件
+        支持新版本MATBIN格式和老版本MTD格式
         
         Args:
             file_path: XML文件路径
@@ -68,9 +69,12 @@ class MaterialXMLParser:
             tree = ET.parse(file_path)
             root = tree.getroot()
             
-            # 检查是否为MATBIN格式
-            if root.tag != 'MATBIN':
-                logger.warning(f"文件 {file_path} 不是MATBIN格式")
+            # 检查格式：支持MATBIN（新版本）和MTD（老版本）
+            is_mtd_format = (root.tag == 'MTD')
+            is_matbin_format = (root.tag == 'MATBIN')
+            
+            if not (is_mtd_format or is_matbin_format):
+                logger.warning(f"文件 {file_path} 格式不支持（根标签：{root.tag}）")
                 return None
             
             # 提取基本信息
@@ -81,10 +85,17 @@ class MaterialXMLParser:
                 'shader_path': self._get_element_text(root, 'ShaderPath', ''),
                 'source_path': self._get_element_text(root, 'SourcePath', ''),
                 'compression': self._get_element_text(root, 'compression', ''),
-                'key': self._get_element_text(root, 'Key', ''),
+                'key': self._get_element_text(root, 'Key', ''),  # 老版本MTD可能没有Key
+                'description': self._get_element_text(root, 'Description', '') if is_mtd_format else '',  # MTD格式特有
+                'is_mtd_format': is_mtd_format,  # 标记格式类型
                 'params': self._parse_params(root),
-                'samplers': self._parse_samplers(root)
+                'samplers': self._parse_samplers(root) if is_matbin_format else self._parse_textures(root)
             }
+            
+            # 如果是MTD格式且没有Key，可以从文件名生成一个标识
+            if is_mtd_format and not material_data['key']:
+                # 老版本MTD文件没有Key字段，这是正常的
+                material_data['key'] = ''
             
             return material_data
             
@@ -175,7 +186,7 @@ class MaterialXMLParser:
             return value_element.text if value_element.text else ''
     
     def _parse_samplers(self, root: ET.Element) -> List[Dict[str, Any]]:
-        """解析材质样例"""
+        """解析材质样例（新版本MATBIN格式）"""
         samplers = []
         samplers_element = root.find('Samplers')
         
@@ -197,6 +208,46 @@ class MaterialXMLParser:
         
         return samplers
     
+    def _parse_textures(self, root: ET.Element) -> List[Dict[str, Any]]:
+        """解析纹理数据（老版本MTD格式）"""
+        textures = []
+        textures_element = root.find('Textures')
+        
+        if textures_element is None:
+            return textures
+        
+        for texture in textures_element.findall('Texture'):
+            try:
+                # 解析UnkFloats
+                unk_floats = {'X': 0, 'Y': 0}
+                unk_floats_element = texture.find('UnkFloats')
+                if unk_floats_element is not None:
+                    float_elements = unk_floats_element.findall('float')
+                    if len(float_elements) >= 2:
+                        try:
+                            unk_floats['X'] = int(float(float_elements[0].text)) if float_elements[0].text else 0
+                            unk_floats['Y'] = int(float(float_elements[1].text)) if float_elements[1].text else 0
+                        except (ValueError, TypeError):
+                            pass
+                
+                # MTD格式的Texture转换为Sampler格式以保持兼容性
+                texture_data = {
+                    'type': self._get_element_text(texture, 'Type'),
+                    'path': self._get_element_text(texture, 'Path'),
+                    'key': '',  # MTD格式的Texture没有Key字段
+                    'unk14': unk_floats,  # 使用UnkFloats作为unk14
+                    # 额外保存MTD特有字段
+                    'extended': self._get_element_text(texture, 'Extended', 'false').lower() == 'true',
+                    'uv_number': int(self._get_element_text(texture, 'UVNumber', '0')),
+                    'shader_data_index': int(self._get_element_text(texture, 'ShaderDataIndex', '0'))
+                }
+                textures.append(texture_data)
+            except Exception as e:
+                logger.warning(f"解析纹理失败: {str(e)}")
+                continue
+        
+        return textures
+    
     def _parse_unk14(self, sampler: ET.Element) -> Dict[str, int]:
         """解析Unk14元素"""
         unk14_element = sampler.find('Unk14')
@@ -214,6 +265,7 @@ class MaterialXMLParser:
     def export_material_to_xml(self, material_data: Dict[str, Any], output_path: str) -> bool:
         """
         导出材质数据为XML文件
+        支持新版本MATBIN格式和老版本MTD格式
         
         Args:
             material_data: 材质数据字典
@@ -223,8 +275,18 @@ class MaterialXMLParser:
             是否导出成功
         """
         try:
+            # 判断是否为MTD格式 - 优先使用is_mtd_format标记，否则从文件名检测
+            is_mtd_format = material_data.get('is_mtd_format', False)
+            
+            # 如果没有明确指定，从文件名推断格式
+            if not is_mtd_format:
+                filename = material_data.get('filename', '')
+                if filename.lower().endswith('.mtd'):
+                    is_mtd_format = True
+                    logger.info(f"从文件名检测到MTD格式: {filename}")
+            
             # 创建根元素
-            root = ET.Element('MATBIN')
+            root = ET.Element('MTD' if is_mtd_format else 'MATBIN')
             root.set('xmlns:xsi', 'http://www.w3.org/2001/XMLSchema-instance')
             root.set('xmlns:xsd', 'http://www.w3.org/2001/XMLSchema')
             root.set('WitchyVersion', '2150000')
@@ -233,13 +295,23 @@ class MaterialXMLParser:
             ET.SubElement(root, 'filename').text = material_data.get('filename', '')
             ET.SubElement(root, 'compression').text = material_data.get('compression', 'None')
             ET.SubElement(root, 'ShaderPath').text = material_data.get('shader_path', '')
-            ET.SubElement(root, 'SourcePath').text = material_data.get('source_path', '')
-            # 材质根Key值（确保使用正确的字段名）
-            material_key = (material_data.get('key_value', '') or 
-                          material_data.get('material_key', '') or 
-                          material_data.get('Key', '') or 
-                          material_data.get('key', ''))
-            ET.SubElement(root, 'Key').text = str(material_key) if material_key else ''
+            
+            # MTD格式可能有Description字段
+            if is_mtd_format:
+                description = material_data.get('description', '')
+                if description:
+                    ET.SubElement(root, 'Description').text = description
+            else:
+                # MATBIN格式有SourcePath
+                ET.SubElement(root, 'SourcePath').text = material_data.get('source_path', '')
+            
+            # 只有MATBIN格式有Key字段，MTD格式没有
+            if not is_mtd_format:
+                material_key = (material_data.get('key_value', '') or 
+                              material_data.get('material_key', '') or 
+                              material_data.get('Key', '') or 
+                              material_data.get('key', ''))
+                ET.SubElement(root, 'Key').text = str(material_key) if material_key else ''
             
             # 添加参数（保持原始顺序）
             if material_data.get('params'):
@@ -345,34 +417,67 @@ class MaterialXMLParser:
                         # 其他类型（String等）
                         value_element.text = str(param_value) if param_value is not None else ''
                     
-                    # 添加Key和Type（确保Key值正确）
-                    key_value = param.get('key_value', '') or param.get('key', '')
-                    ET.SubElement(param_element, 'Key').text = str(key_value) if key_value else ''
+                    # MTD格式没有参数的Key字段
+                    if not is_mtd_format:
+                        key_value = param.get('key_value', '') or param.get('key', '')
+                        ET.SubElement(param_element, 'Key').text = str(key_value) if key_value else ''
                     ET.SubElement(param_element, 'Type').text = param_type
             
-            # 添加样例
+            # 添加样例/纹理
             if material_data.get('samplers'):
-                samplers_element = ET.SubElement(root, 'Samplers')
-                for sampler in material_data['samplers']:
-                    sampler_element = ET.SubElement(samplers_element, 'Sampler')
-                    ET.SubElement(sampler_element, 'Type').text = sampler.get('type', '')
-                    ET.SubElement(sampler_element, 'Path').text = sampler.get('path', '')
-                    # 修复：使用正确的键字段名
-                    key_value = sampler.get('key_value', '') or sampler.get('key', '')
-                    ET.SubElement(sampler_element, 'Key').text = str(key_value) if key_value else ''
-                    
-                    # 添加Unk14
-                    unk14_x = sampler.get('unk14_x', 0)
-                    unk14_y = sampler.get('unk14_y', 0)
-                    # 兼容新旧数据格式
-                    if isinstance(sampler.get('unk14'), dict):
-                        unk14_data = sampler.get('unk14', {'X': 0, 'Y': 0})
-                        unk14_x = unk14_data.get('X', 0)
-                        unk14_y = unk14_data.get('Y', 0)
-                    
-                    unk14_element = ET.SubElement(sampler_element, 'Unk14')
-                    ET.SubElement(unk14_element, 'X').text = str(unk14_x)
-                    ET.SubElement(unk14_element, 'Y').text = str(unk14_y)
+                # 判断使用Samplers还是Textures
+                if is_mtd_format:
+                    # MTD格式：使用Textures
+                    textures_element = ET.SubElement(root, 'Textures')
+                    for sampler in material_data['samplers']:
+                        texture_element = ET.SubElement(textures_element, 'Texture')
+                        ET.SubElement(texture_element, 'Type').text = sampler.get('type', '')
+                        
+                        # MTD特有字段
+                        extended = sampler.get('extended', True)
+                        ET.SubElement(texture_element, 'Extended').text = 'true' if extended else 'false'
+                        ET.SubElement(texture_element, 'UVNumber').text = str(sampler.get('uv_number', 1))
+                        ET.SubElement(texture_element, 'ShaderDataIndex').text = str(sampler.get('shader_data_index', 0))
+                        
+                        ET.SubElement(texture_element, 'Path').text = sampler.get('path', '')
+                        
+                        # MTD使用UnkFloats而不是Unk14
+                        unk14_x = 0
+                        unk14_y = 0
+                        if isinstance(sampler.get('unk14'), dict):
+                            unk14_data = sampler.get('unk14', {'X': 0, 'Y': 0})
+                            unk14_x = unk14_data.get('X', 0)
+                            unk14_y = unk14_data.get('Y', 0)
+                        else:
+                            unk14_x = sampler.get('unk14_x', 0)
+                            unk14_y = sampler.get('unk14_y', 0)
+                        
+                        unk_floats_element = ET.SubElement(texture_element, 'UnkFloats')
+                        ET.SubElement(unk_floats_element, 'float').text = str(unk14_x)
+                        ET.SubElement(unk_floats_element, 'float').text = str(unk14_y)
+                else:
+                    # MATBIN格式：使用Samplers
+                    samplers_element = ET.SubElement(root, 'Samplers')
+                    for sampler in material_data['samplers']:
+                        sampler_element = ET.SubElement(samplers_element, 'Sampler')
+                        ET.SubElement(sampler_element, 'Type').text = sampler.get('type', '')
+                        ET.SubElement(sampler_element, 'Path').text = sampler.get('path', '')
+                        # 修复：使用正确的键字段名
+                        key_value = sampler.get('key_value', '') or sampler.get('key', '')
+                        ET.SubElement(sampler_element, 'Key').text = str(key_value) if key_value else ''
+                        
+                        # 添加Unk14
+                        unk14_x = sampler.get('unk14_x', 0)
+                        unk14_y = sampler.get('unk14_y', 0)
+                        # 兼容新旧数据格式
+                        if isinstance(sampler.get('unk14'), dict):
+                            unk14_data = sampler.get('unk14', {'X': 0, 'Y': 0})
+                            unk14_x = unk14_data.get('X', 0)
+                            unk14_y = unk14_data.get('Y', 0)
+                        
+                        unk14_element = ET.SubElement(sampler_element, 'Unk14')
+                        ET.SubElement(unk14_element, 'X').text = str(unk14_x)
+                        ET.SubElement(unk14_element, 'Y').text = str(unk14_y)
             
             # 格式化并写入文件
             self._indent_xml(root)

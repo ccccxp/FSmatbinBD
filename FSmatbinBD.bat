@@ -17,8 +17,9 @@ if %errorlevel% neq 0 (
 )
 
 REM 检查必需文件
-if not exist "main.py" (
-    echo ❌ 错误: 未找到main.py文件
+REM 检查必需文件
+if not exist "qt_main.py" (
+    echo ❌ 错误: 未找到qt_main.py文件
     echo 请确保在项目根目录运行此脚本
     pause
     exit /b 1
@@ -36,7 +37,7 @@ echo ✓ 启动材质库管理系统...
 echo.
 
 REM 启动应用
-python main.py
+python qt_main.py
 
 if %errorlevel% neq 0 (
     echo.

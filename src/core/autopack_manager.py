@@ -87,7 +87,7 @@ class AutoPackManager:
             
             # 添加到待封包列表
             pack_item = {
-                'id': len(self.pending_list) + 1,
+                'id': self._get_next_id(),
                 'xml_file': xml_file,
                 'matbin_file': matbin_file,
                 'original_path': original_matbin_path,
@@ -110,6 +110,37 @@ class AutoPackManager:
         """获取待封包列表"""
         return self.pending_list.copy()
     
+    def add_material_by_db_id(self, material_id: int, material_name: str = ""):
+        """
+        通过数据库ID添加材质到自动封包列表
+        
+        Args:
+            material_id: 数据库中的材质ID
+            material_name: 材质名称（用于显示）
+        """
+        # 检查是否已存在
+        for item in self.pending_list:
+            if item.get('material_id') == material_id:
+                logger.info(f"材质 {material_id} 已在自动封包列表中")
+                return
+        
+        # 添加到待封包列表
+        pack_item = {
+            'id': self._get_next_id(),
+            'material_id': material_id,
+            'filename': material_name or f"材质_{material_id}",
+            'xml_file': '',  # 从数据库导出时生成
+            'matbin_file': '',  # 执行封包时生成
+            'original_path': '',
+            'target_path': '',  # 用户指定的封包路径
+            'added_time': datetime.now().isoformat(),
+        }
+        
+        self.pending_list.append(pack_item)
+        self.save_config()
+        
+        logger.info(f"已添加材质到自动封包: ID={material_id}, 名称={material_name}")
+    
     def get_statistics(self) -> Dict[str, int]:
         """获取统计信息"""
         return {
@@ -128,14 +159,130 @@ class AutoPackManager:
     def remove_from_pending(self, item_ids: List[int]):
         """从待封包列表中移除项目"""
         self.pending_list = [item for item in self.pending_list if item['id'] not in item_ids]
+        # 删除后重新排序ID
+        self._reorder_ids()
         self.save_config()
     
-    def execute_autopack(self, base_pack_dir: str) -> Dict[str, any]:
+    def _get_next_id(self) -> int:
+        """获取下一个可用的ID（从1开始顺序递增）"""
+        if not self.pending_list:
+            return 1
+        return max(item.get('id', 0) for item in self.pending_list) + 1
+    
+    def _reorder_ids(self):
+        """重新排序所有项目的ID（从1开始顺序排列）"""
+        for idx, item in enumerate(self.pending_list, start=1):
+            item['id'] = idx
+    
+    def _prepare_db_materials(self, selected_ids: List[int] = None):
+        """
+        预处理：对于有 material_id 但没有 matbin_file 的项目，从数据库导出为XML并转为MATBIN
+        
+        Args:
+            selected_ids: 要处理的项目ID列表，如果为None则处理所有项目
+        """
+        logger.info(f"_prepare_db_materials 开始执行, selected_ids={selected_ids}")
+        logger.info(f"pending_list 项目数: {len(self.pending_list)}")
+        
+        from .database import MaterialDatabase
+        from .xml_parser import MaterialXMLParser
+        from .witchybnd_processor import WitchyBNDProcessor
+        
+        db = MaterialDatabase()
+        parser = MaterialXMLParser()
+        processor = WitchyBNDProcessor()
+        
+        items_updated = False
+        
+        for item in self.pending_list:
+            logger.info(f"检查项目: id={item.get('id')}, material_id={item.get('material_id')}, matbin_file={item.get('matbin_file')}")
+            
+            # 如果指定了选中ID，只处理选中的项目
+            if selected_ids and item.get('id') not in selected_ids:
+                logger.info(f"跳过项目 {item.get('id')}: 不在选中列表中")
+                continue
+            
+            # 跳过已经有matbin文件的项目
+            if item.get('matbin_file') and os.path.exists(item.get('matbin_file', '')):
+                continue
+            
+            # 检查是否有material_id
+            material_id = item.get('material_id')
+            if not material_id:
+                continue
+            
+            try:
+                # 从数据库获取材质详情
+                logger.info(f"从数据库加载材质: ID={material_id}")
+                material_data = db.get_material_detail(material_id)
+                if not material_data:
+                    logger.warning(f"找不到材质: ID={material_id}")
+                    continue
+                
+                # 导出为XML文件 - 根据材质类型使用正确的格式
+                # .mtd 用于只狼, .matbin 用于艾尔登法环
+                filename = material_data.get('filename', f'material_{material_id}')
+                
+                # 检测材质类型并使用正确的扩展名
+                if filename.lower().endswith('.mtd'):
+                    # 只狼/老版本材质 - 使用 .mtd.xml
+                    base_name = filename[:-4]  # 移除 .mtd
+                    xml_filename = f"{base_name}.mtd.xml"
+                    output_ext = ".mtd"
+                elif filename.lower().endswith('.matbin'):
+                    # 艾尔登法环/新版本材质 - 使用 .matbin.xml 
+                    base_name = filename[:-7]  # 移除 .matbin
+                    xml_filename = f"{base_name}.matbin.xml"
+                    output_ext = ".matbin"
+                else:
+                    # 默认使用mtd格式（兼容老版本）
+                    base_name = filename
+                    xml_filename = f"{base_name}.mtd.xml"
+                    output_ext = ".mtd"
+                
+                xml_path = os.path.join(self.autopack_dir, xml_filename)
+                parser.export_material_to_xml(material_data, xml_path)
+                logger.info(f"导出XML: {xml_path} (格式: {output_ext})")
+                
+                # 转换为MATBIN
+                results = processor.pack_xml_to_matbin_batch([xml_path])
+                matbin_file = results.get(xml_path)
+                
+                if not matbin_file:
+                    logger.warning(f"XML转MATBIN失败: {xml_path}")
+                    continue
+                
+                # 移动到autopack目录
+                output_filename = os.path.basename(matbin_file)
+                target_matbin = os.path.join(self.autopack_dir, output_filename)
+                if matbin_file != target_matbin:
+                    shutil.move(matbin_file, target_matbin)
+                    matbin_file = target_matbin
+                
+                # 更新项目信息
+                item['xml_file'] = xml_path
+                item['matbin_file'] = matbin_file
+                item['filename'] = os.path.basename(matbin_file)
+                items_updated = True
+                
+                logger.info(f"材质准备完成: ID={material_id} -> {matbin_file}")
+                
+            except Exception as e:
+                logger.error(f"准备材质失败: ID={material_id}, 错误: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
+        
+        # 保存更新后的配置
+        if items_updated:
+            self.save_config()
+
+    def execute_autopack(self, base_pack_dir: str, selected_ids: List[int] = None) -> Dict[str, any]:
         """
         执行自动封包（使用多线程优化）
         
         Args:
             base_pack_dir: 基础封包目录
+            selected_ids: 要封包的项目ID列表，如果为None则封包所有项目
             
         Returns:
             封包结果信息
@@ -153,6 +300,7 @@ class AutoPackManager:
             # 调试日志
             logger.info(f"开始执行自动封包，基础目录: {base_pack_dir}")
             logger.info(f"当前待封包列表项目数: {len(self.pending_list)}")
+            logger.info(f"选中的项目ID: {selected_ids}")
             
             # 首先检查是否有任何待封包项目
             if not self.pending_list:
@@ -162,15 +310,24 @@ class AutoPackManager:
                 logger.warning("封包失败: 待封包列表为空")
                 return result
             
-            # 筛选有目标路径的项目
-            items_to_pack = [item for item in self.pending_list if item.get('target_path')]
-            logger.info(f"筛选后有目标路径的项目数: {len(items_to_pack)}")
+            # 预处理：对于有 material_id 但没有 matbin_file 的项目，从数据库导出
+            # 只预处理选中的项目
+            self._prepare_db_materials(selected_ids)
+            
+            # 筛选要封包的项目（根据selected_ids筛选）
+            if selected_ids:
+                items_to_pack = [item for item in self.pending_list 
+                                if item.get('id') in selected_ids]
+            else:
+                items_to_pack = self.pending_list.copy()
+            
+            logger.info(f"筛选后要封包的项目数: {len(items_to_pack)}")
             
             if not items_to_pack:
                 from .i18n import _
-                result['error'] = _('no_target_path_items')
+                result['error'] = "没有选中的项目"
                 result['success'] = False
-                logger.warning("封包失败: 没有指定封包路径的项目")
+                logger.warning("封包失败: 没有选中的项目")
                 return result
             
             # 按目标路径分组
@@ -200,8 +357,13 @@ class AutoPackManager:
                 matbin_files_copied = []
                 for item in items:
                     try:
-                        source_file = item['matbin_file']
-                        target_file = os.path.join(full_target_path, item['filename'])
+                        source_file = item.get('matbin_file', '')
+                        
+                        # 检查是否有有效的matbin文件
+                        if not source_file:
+                            raise ValueError(f"材质 {item.get('filename', '未知')} 尚未生成MATBIN文件，请检查数据库导出是否成功")
+                        
+                        target_file = os.path.join(full_target_path, item.get('filename', os.path.basename(source_file)))
                         
                         if os.path.exists(source_file):
                             shutil.copy2(source_file, target_file)
