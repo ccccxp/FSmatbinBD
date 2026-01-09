@@ -261,7 +261,7 @@ def build_with_spec(version: str = None):
     current_version = update_version(base_dir, version)
     
     print(f"使用 spec 文件构建 (v{current_version})...")
-    PyInstaller.__main__.run([spec_file, '--clean'])
+    PyInstaller.__main__.run([spec_file, '--clean', '--noconfirm'])
     return 0
 
 
@@ -269,13 +269,16 @@ if __name__ == '__main__':
     import argparse
     
     parser = argparse.ArgumentParser(description='FSmatbinBD 构建脚本')
-    parser.add_argument('--spec', action='store_true', 
-                       help='使用 FSMatbinBD.spec 文件构建')
+    parser.add_argument('--dynamic', action='store_true', 
+                       help='使用动态构建模式（不推荐，会覆盖 spec 文件）')
     parser.add_argument('--version', '-v', type=str, default=None,
                        help='指定新版本号 (例如: 1.2.0)，不指定则使用当前版本')
     args = parser.parse_args()
     
-    if args.spec:
-        sys.exit(build_with_spec(args.version))
-    else:
+    if args.dynamic:
+        print("警告: 动态构建模式会生成新的 spec 文件，覆盖现有的可移植配置！")
         sys.exit(build(args.version))
+    else:
+        # 默认使用 spec 文件构建（推荐，可移植）
+        sys.exit(build_with_spec(args.version))
+

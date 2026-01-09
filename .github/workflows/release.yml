@@ -116,7 +116,7 @@ jobs:
         
         # 复制 README 和配置文件
         Copy-Item README.md dist/${{ env.APP_NAME }}/ -ErrorAction SilentlyContinue
-        Copy-Item README_中文.md dist/${{ env.APP_NAME }}/ -ErrorAction SilentlyContinue
+        Copy-Item README_CN.md dist/${{ env.APP_NAME }}/ -ErrorAction SilentlyContinue
         
         # 确保数据目录结构存在
         New-Item -ItemType Directory -Force -Path dist/${{ env.APP_NAME }}/data/databases | Out-Null
