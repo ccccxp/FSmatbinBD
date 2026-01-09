@@ -3,8 +3,38 @@ Entry point for the new Qt-based GUI preview.
 Run with: python qt_main.py
 """
 import sys
-from PySide6.QtWidgets import QApplication
 
+
+def check_integrity():
+    """启动前进行完整性校验"""
+    try:
+        from src.core.about_secure import verify_integrity, get_integrity_error_message
+        if not verify_integrity():
+            # 完整性校验失败，显示错误并退出
+            from PySide6.QtWidgets import QApplication, QMessageBox
+            app = QApplication(sys.argv)
+            QMessageBox.critical(
+                None, 
+                "完整性校验失败 / Integrity Check Failed",
+                get_integrity_error_message()
+            )
+            sys.exit(1)
+    except ImportError:
+        # 模块导入失败，也认为是篡改
+        from PySide6.QtWidgets import QApplication, QMessageBox
+        app = QApplication(sys.argv)
+        QMessageBox.critical(
+            None,
+            "完整性校验失败 / Integrity Check Failed",
+            "关键模块缺失，程序无法启动。\nCritical module missing. Program cannot start."
+        )
+        sys.exit(1)
+
+
+# 首先进行完整性校验
+check_integrity()
+
+from PySide6.QtWidgets import QApplication
 from src.gui_qt.main_window import launch
 
 

@@ -5,6 +5,7 @@
 """
 
 import os
+import sys
 import json
 import shutil
 import logging
@@ -14,19 +15,36 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+
+def _get_app_root() -> str:
+    """获取应用程序根目录（兼容打包环境）"""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    else:
+        return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
 class AutoPackManager:
     """自动封包管理器"""
     
-    def __init__(self, autopack_dir: str = "autopack", config_file: str = "autopack_config.json"):
+    def __init__(self, autopack_dir: str = None, config_file: str = None):
         """
         初始化自动封包管理器
         
         Args:
-            autopack_dir: 自动封包目录
-            config_file: 配置文件路径
+            autopack_dir: 自动封包目录，None 则使用默认路径
+            config_file: 配置文件路径，None 则使用默认路径
         """
+        app_root = _get_app_root()
+        
+        if autopack_dir is None:
+            autopack_dir = os.path.join(app_root, "autopack")
         self.autopack_dir = autopack_dir
+        
+        if config_file is None:
+            config_file = os.path.join(app_root, "autopack_config.json")
         self.config_file = config_file
+        
         self.pending_list = []  # 待封包列表
         
         # 确保目录存在

@@ -13,9 +13,11 @@ import shutil
 import logging
 import threading
 import time
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Callable
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from src.utils.resource_path import get_tools_path, get_data_path
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +40,13 @@ class WitchyBNDProcessor:
         logger.info(f"WitchyBND处理器初始化 - 工具路径: {self.witchybnd_path}, 最大线程数: {self.max_threads}")
         
     def _find_witchybnd_path(self) -> str:
-        """自动查找WitchyBND工具路径"""
+        """自动查找WitchyBND工具路径（支持打包环境）"""
+        # 优先使用资源路径辅助模块获取打包环境下的路径
+        packed_path = get_tools_path("WitchyBND/WitchyBND.exe")
+        if os.path.exists(packed_path):
+            return packed_path
+        
+        # 兼容开发环境的相对路径
         possible_paths = [
             "tools/WitchyBND/WitchyBND.exe",  # 项目内置工具 (首选)
             "WitchyBND/WitchyBND.exe",        # 相对路径
@@ -51,7 +59,7 @@ class WitchyBNDProcessor:
                 return os.path.abspath(path)
         
         # 如果找不到，返回默认路径
-        return "WitchyBND/WitchyBND.exe"
+        return get_tools_path("WitchyBND/WitchyBND.exe")
     
     def _run_witchy_drag_drop(self, target_path: str, timeout: int = 300) -> Tuple[bool, str]:
         """
@@ -134,6 +142,59 @@ class WitchyBNDProcessor:
             with self.thread_lock:
                 logger.error(error_msg)
             return False, error_msg
+
+    def _run_witchy_batch(self, target_paths: List[str], timeout: int = 300) -> Tuple[bool, str]:
+        """
+        批量执行 WitchyBND 操作
+        
+        Args:
+            target_paths: 目标文件路径列表
+            timeout: 超时时间
+            
+        Returns:
+            (成功标志, 错误信息)
+        """
+        if not target_paths:
+            return True, ""
+            
+        try:
+            # 构建命令 - 将所有目标路径作为参数传递
+            cmd = [self.witchybnd_path] + target_paths
+            
+            # 检查命令行长度限制 (Windows 限制约 32767 字符)
+            cmd_len = sum(len(arg) + 1 for arg in cmd)
+            if cmd_len > 32000:
+                logger.warning(f"命令行过长 ({cmd_len}), 建议分更小的批次")
+            
+            # 使用Popen而不是run
+            process = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                text=True,
+                encoding='utf-8',
+                errors='ignore'
+            )
+            
+            try:
+                return_code = process.wait(timeout=timeout)
+                
+                if return_code == 0 or return_code == 3762504530:
+                    return True, ""
+                else:
+                    return True, f"返回码 {return_code}" # 同样依赖文件检查
+                    
+            except subprocess.TimeoutExpired:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                return False, f"批量操作超时（{timeout}秒）"
+                
+        except Exception as e:
+            logger.error(f"WitchyBND批量执行异常: {str(e)}")
+            return False, str(e)
+
 
     def _check_unpack_output(self, dcx_file_path: str) -> Tuple[bool, str, int]:
         """
@@ -635,7 +696,8 @@ class WitchyBNDProcessor:
             f"3. WitchyBND是否成功处理了文件"
         )
     
-    def batch_extract_matbins(self, directory: str, preserve_structure: bool = True) -> List[str]:
+    def batch_extract_matbins(self, directory: str, preserve_structure: bool = True,
+                               progress_callback: Callable[[int, int, str], None] = None) -> List[str]:
         """
         批量多线程解包目录中的所有.matbin/.mtd文件
         支持新版本的.matbin和老版本的.mtd文件
@@ -643,6 +705,7 @@ class WitchyBNDProcessor:
         Args:
             directory: 包含.matbin/.mtd文件的目录
             preserve_structure: 是否保持目录结构
+            progress_callback: 进度回调函数 (current, total, filename)
             
         Returns:
             生成的XML文件列表
@@ -662,13 +725,15 @@ class WitchyBNDProcessor:
         
         logger.info(f"发现 {len(matbin_files)} 个材质文件(.matbin/.mtd)，开始多线程批量转换...")
         
-        # 使用多线程批处理方法
-        def progress_callback(current, total, filename, status):
+        # 使用多线程批处理方法，传递进度回调
+        def internal_callback(current, total, filename, status):
+            if progress_callback:
+                progress_callback(current, total, filename)
             if current % 10 == 0 or current == total:  # 每10个文件或完成时报告进度
                 logger.info(f"转换进度: {current}/{total} - {filename} - {status}")
         
         # 调用多线程批处理方法
-        results = self.extract_matbin_to_xml_batch(matbin_files, callback=progress_callback)
+        results = self.extract_matbin_to_xml_batch(matbin_files, callback=internal_callback)
         
         # 收集成功转换的XML文件
         xml_files = [xml_file for xml_file in results.values() if xml_file]
@@ -779,7 +844,7 @@ class WitchyBNDProcessor:
     
     def extract_matbin_to_xml_batch(self, matbin_files: List[str], callback=None) -> Dict[str, str]:
         """
-        批量多线程转换MATBIN文件为XML
+        批量多线程转换MATBIN文件为XML（优化版：8线程并发执行批处理）
         
         Args:
             matbin_files: MATBIN文件路径列表
@@ -790,54 +855,71 @@ class WitchyBNDProcessor:
         """
         results = {}
         
-        def convert_single_matbin(matbin_file: str) -> Tuple[str, str]:
-            """转换单个MATBIN文件"""
+        # 将文件分批，每批50个
+        batch_size = 50
+        batches = [matbin_files[i:i + batch_size] for i in range(0, len(matbin_files), batch_size)]
+        
+        total_files = len(matbin_files)
+        processed_count = 0
+        count_lock = threading.Lock() # 用于保护计数器的锁
+        
+        logger.info(f"开始批量转换 {total_files} 个文件，分 {len(batches)} 批，使用 8 线程并发处理")
+        
+        def process_batch(batch_index, batch):
+            nonlocal processed_count
+            batch_results = {}
             try:
-                if callback:
-                    callback(0, len(matbin_files), os.path.basename(matbin_file), "开始转换...")
+                # 执行批处理
+                success, error = self._run_witchy_batch(batch, timeout=600)
                 
-                xml_file = self.extract_matbin_to_xml(matbin_file)
-                
-                if callback:
-                    callback(0, len(matbin_files), os.path.basename(matbin_file), "转换完成")
+                # 检查结果并更新进度
+                for matbin_file in batch:
+                    xml_file = matbin_file + '.xml'
+                    if os.path.exists(xml_file):
+                        batch_results[matbin_file] = xml_file
+                    else:
+                        batch_results[matbin_file] = ""
                     
-                return matbin_file, xml_file
+                    with count_lock:
+                        processed_count += 1
+                        current_count = processed_count
+                    
+                    # 细粒度更新进度（为了平滑性，每个文件都尝试更新，但限制频率防止UI卡顿）
+                    # 由于是多线程，这里直接回调即可，UI层通常有如QTimer的机制或者Qt本身的消息队列处理
+                    if callback and current_count % 5 == 0: 
+                         callback(current_count, total_files, f"处理中... ({current_count}/{total_files})", "转换中")
+                
+                return batch_results
             except Exception as e:
-                if callback:
-                    callback(0, len(matbin_files), os.path.basename(matbin_file), f"转换失败: {str(e)}")
-                return matbin_file, ""
-        
-        logger.info(f"开始批量转换 {len(matbin_files)} 个MATBIN文件，使用 {self.max_threads} 个线程")
-        
-        # 使用线程池并发处理
-        with ThreadPoolExecutor(max_workers=self.max_threads) as executor:
-            # 提交所有任务
-            future_to_matbin = {executor.submit(convert_single_matbin, matbin_file): matbin_file 
-                               for matbin_file in matbin_files}
+                logger.error(f"批次 {batch_index} 处理失败: {str(e)}")
+                # 标记该批次所有文件失败
+                for f in batch:
+                    batch_results[f] = ""
+                    with count_lock:
+                        processed_count += 1
+                return batch_results
+
+        # 使用线程池并发处理批次
+        # 注意：这里是"批次的并发"，每个批次内部是调用一次WitchyBND
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            future_to_batch = {
+                executor.submit(process_batch, i, batch): batch 
+                for i, batch in enumerate(batches)
+            }
             
-            completed = 0
-            # 处理完成的任务
-            for future in as_completed(future_to_matbin):
+            for future in as_completed(future_to_batch):
                 try:
-                    matbin_file, xml_file = future.result()
-                    results[matbin_file] = xml_file
-                    completed += 1
-                    
-                    if callback:
-                        callback(completed, len(matbin_files), os.path.basename(matbin_file), 
-                                "已完成" if xml_file else "失败")
-                        
-                    if completed % 10 == 0:  # 每10个文件记录一次进度
-                        logger.info(f"转换进度: {completed}/{len(matbin_files)}")
-                    
+                    batch_res = future.result()
+                    results.update(batch_res)
                 except Exception as e:
-                    matbin_file = future_to_matbin[future]
-                    results[matbin_file] = ""
-                    completed += 1
-                    logger.error(f"转换异常 {os.path.basename(matbin_file)}: {str(e)}")
+                    logger.error(f"批次任务异常: {str(e)}")
+
+        # 确保最后发送一次100%进度
+        if callback:
+            callback(total_files, total_files, "转换完成", "完成")
         
         success_count = len([r for r in results.values() if r])
-        logger.info(f"批量转换完成: 成功 {success_count}/{len(matbin_files)}")
+        logger.info(f"批量转换完成: 成功 {success_count}/{total_files} ({(success_count/total_files*100):.1f}%)")
         
         return results
     
@@ -887,20 +969,44 @@ class WitchyBNDProcessor:
 
 
 class MaterialLibraryImporter:
-    """材质库导入器（支持DCX自动解包）"""
+    """材质库导入器（支持DCX自动解包）- 优化版本"""
     
     def __init__(self, database, witchybnd_path: str = None):
         self.database = database
         self.processor = WitchyBNDProcessor(witchybnd_path)
+        # 获取CPU核心数，用于并行处理
+        self._max_workers = min(os.cpu_count() or 4, 16)  # 最多使用16个线程
     
-    def import_from_dcx(self, dcx_file: str, library_name: str, description: str = "") -> Dict[str, any]:
+    def _parse_single_xml(self, xml_file: str, parser) -> Tuple[Optional[Dict], str, Optional[str]]:
         """
-        从DCX文件导入材质库
+        解析单个XML文件（用于并行处理）
+        
+        Args:
+            xml_file: XML文件路径
+            parser: MaterialXMLParser实例
+            
+        Returns:
+            (材质数据, 文件路径, 错误信息) 元组
+        """
+        try:
+            material_data = parser.parse_file(xml_file)
+            if material_data:
+                return (material_data, xml_file, None)
+            else:
+                return (None, xml_file, "解析返回空结果")
+        except Exception as e:
+            return (None, xml_file, str(e))
+    
+    def import_from_dcx(self, dcx_file: str, library_name: str, description: str = "",
+                       progress_callback: Callable[[str, int, int], None] = None) -> Dict[str, any]:
+        """
+        从DCX文件导入材质库（优化版本：多线程XML解析）
         
         Args:
             dcx_file: DCX文件路径
             library_name: 材质库名称
             description: 材质库描述
+            progress_callback: 进度回调函数 (阶段名称, 当前进度, 总数)
             
         Returns:
             导入结果信息
@@ -913,20 +1019,40 @@ class MaterialLibraryImporter:
             'error': None
         }
         
+        def report_progress(stage: str, current: int, total: int):
+            """报告进度"""
+            if progress_callback:
+                try:
+                    progress_callback(stage, current, total)
+                except Exception:
+                    pass
+        
         try:
             # 1. 解包DCX文件
+            # 传递 total=0 触发UI的忙碌动画
+            report_progress("解包DCX文件", 0, 0)
             logger.info(f"开始解包DCX文件: {dcx_file}")
             extracted_dir = self.processor.extract_dcx(dcx_file)
             
-            # 2. 批量转换.matbin/.mtd为XML
+            # 2. 批量转换.matbin/.mtd为XML（最耗时的步骤）
             logger.info(f"开始批量转换材质文件(.matbin/.mtd): {extracted_dir}")
-            xml_files = self.processor.batch_extract_matbins(extracted_dir)
+            
+            # 定义MATBIN转换进度回调
+            def matbin_progress(current, total, filename, status=""):
+                # 传递实际进度
+                report_progress("转换材质文件", current, total)
+            
+            xml_files = self.processor.batch_extract_matbins(
+                extracted_dir, 
+                progress_callback=matbin_progress
+            )
             result['xml_files'] = xml_files
             
             if not xml_files:
                 raise RuntimeError("未找到可转换的材质文件(.matbin/.mtd)")
             
             # 3. 创建材质库
+            report_progress("写入数据库", 0, 0)
             library_id = self.database.create_library(
                 name=library_name,
                 description=description,
@@ -934,52 +1060,86 @@ class MaterialLibraryImporter:
             )
             result['library_id'] = library_id
             
-            # 4. 导入材质数据
+            # 4. 并行解析XML文件（性能优化关键）
             from .xml_parser import MaterialXMLParser
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            
             parser = MaterialXMLParser()
             materials_data = []
-            successfully_parsed_xml_files = []  # 追踪成功解析的XML文件
+            successfully_parsed_xml_files = []
+            total_files = len(xml_files)
+            parsed_count = 0
             
-            logger.info(f"开始解析 {len(xml_files)} 个XML文件...")
-            for xml_file in xml_files:
-                try:
-                    # 使用正确的解析方法
-                    material_data = parser.parse_file(xml_file)
-                    if material_data:
-                        materials_data.append(material_data)
-                        successfully_parsed_xml_files.append(xml_file)  # 记录成功解析的文件
-                        logger.debug(f"解析成功: {material_data.get('filename', 'unknown')}")
-                    else:
-                        logger.warning(f"跳过XML文件 {os.path.basename(xml_file)}: 解析返回空结果")
+            logger.info(f"开始并行解析 {total_files} 个XML文件（使用 {self._max_workers} 个线程）...")
+            report_progress("解析XML文件", 0, total_files)
+            
+            # 使用线程池并行解析XML
+            with ThreadPoolExecutor(max_workers=self._max_workers) as executor:
+                # 提交所有解析任务
+                future_to_file = {
+                    executor.submit(self._parse_single_xml, xml_file, parser): xml_file 
+                    for xml_file in xml_files
+                }
+                
+                # 收集结果
+                for future in as_completed(future_to_file):
+                    parsed_count += 1
+                    xml_file = future_to_file[future]
+                    report_progress("解析XML文件", parsed_count, total_files)
+                    
+                    try:
+                        material_data, xml_file, error = future.result()
+                        if material_data:
+                            materials_data.append(material_data)
+                            successfully_parsed_xml_files.append(xml_file)
+                            logger.debug(f"解析成功: {material_data.get('filename', 'unknown')}")
+                        else:
+                            logger.warning(f"跳过XML文件 {os.path.basename(xml_file)}: {error}")
+                            logger.info(f"保留XML文件以便手动检查: {xml_file}")
+                    except Exception as e:
+                        xml_file = future_to_file[future]
+                        logger.warning(f"跳过XML文件 {os.path.basename(xml_file)}: {str(e)}")
                         logger.info(f"保留XML文件以便手动检查: {xml_file}")
-                except Exception as e:
-                    logger.warning(f"跳过XML文件 {os.path.basename(xml_file)}: {str(e)}")
-                    logger.info(f"保留XML文件以便手动检查: {xml_file}")
-                    continue
             
+            logger.info(f"XML解析完成：成功 {len(materials_data)}/{total_files}")
+            
+            # 5. 批量添加到数据库（使用优化后的add_materials方法）
             if materials_data:
-                logger.info(f"开始添加 {len(materials_data)} 个材质到数据库...")
+                total_materials = len(materials_data)
+                logger.info(f"开始添加 {total_materials} 个材质到数据库...")
+                report_progress("写入数据库", 0, total_materials)
+                
                 try:
-                    # 确保数据库连接可用
+                    # 定义数据库进度回调
+                    def db_progress(current, total, message=""):
+                        report_progress("写入数据库", current, total)
+                    
+                    # 使用优化后的批量添加方法
                     if hasattr(self.database, 'add_materials'):
-                        self.database.add_materials(library_id, materials_data)
+                        self.database.add_materials(
+                            library_id, 
+                            materials_data,
+                            progress_callback=db_progress
+                        )
                     else:
                         # 如果没有批量添加方法，逐个添加
-                        for material_data in materials_data:
+                        for i, material_data in enumerate(materials_data):
                             self.database.add_material(library_id, material_data)
+                            report_progress("写入数据库", i + 1, total_materials)
                     
-                    result['material_count'] = len(materials_data)
-                    logger.info(f"成功添加 {len(materials_data)} 个材质到数据库")
+                    result['material_count'] = total_materials
+                    logger.info(f"成功添加 {total_materials} 个材质到数据库")
                 except Exception as e:
                     logger.error(f"添加材质到数据库失败: {str(e)}")
-                    # 即使数据库添加失败，我们仍然认为解包是成功的
-                    result['material_count'] = len(materials_data)
+                    result['material_count'] = total_materials
                     result['database_error'] = str(e)
             else:
                 logger.warning("没有成功解析的材质数据")
                 result['material_count'] = 0
             
-            # 5. 清理XML文件，只删除成功解析的文件
+            # 6. 清理XML文件，只删除成功解析的文件
+            # 6. 清理XML文件，只删除成功解析的文件
+            report_progress("清理临时文件", 0, 0)
             logger.info(f"清理成功解析的XML文件 ({len(successfully_parsed_xml_files)}/{len(xml_files)})...")
             if successfully_parsed_xml_files:
                 try:

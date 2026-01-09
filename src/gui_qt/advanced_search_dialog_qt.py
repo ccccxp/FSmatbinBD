@@ -16,6 +16,8 @@ from typing import Dict, List, Any, Optional
 import os
 
 from src.core.i18n import _
+from src.utils.resource_path import get_assets_path
+from src.gui_qt.standard_dialogs import apply_button_style
 
 
 
@@ -40,12 +42,13 @@ class SearchConditionWidget(QFrame):
                     stop:1 rgba(20, 28, 40, 220));
                 border: 1px solid rgba(110, 165, 255, 120);
                 border-radius: 10px;
-                padding: 8px 12px;
+                padding: 4px 10px;
             }
         """)
         
         layout = QVBoxLayout(self)
-        layout.setSpacing(10)
+        layout.setSpacing(6)
+        layout.setContentsMargins(6, 6, 6, 6)
         
         # 标题行 - 加粗白色字体
         title_row = QHBoxLayout()
@@ -67,36 +70,14 @@ class SearchConditionWidget(QFrame):
         
         # 删除按钮
         self.delete_btn = QPushButton(_('delete_button_icon'))
+        from src.gui_qt.standard_dialogs import apply_button_style
+        apply_button_style(self.delete_btn, 'danger')
         self.delete_btn.setFixedWidth(85)
-        self.delete_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(255, 80, 80, 200),
-                    stop:1 rgba(235, 60, 60, 200));
-                color: white;
-                border: 1px solid rgba(255, 100, 100, 150);
-                border-radius: 5px;
-                padding: 5px 12px;
-                font-weight: bold;
-                font-size: 8pt;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(255, 100, 100, 240),
-                    stop:1 rgba(245, 80, 80, 240));
-                border: 1px solid rgba(255, 120, 120, 200);
-            }
-            QPushButton:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(235, 60, 60, 255),
-                    stop:1 rgba(215, 40, 40, 255));
-            }
-        """)
         title_row.addWidget(self.delete_btn)
         layout.addLayout(title_row)
         
-        # 获取chevron_down.svg图标路径
-        icon_path = os.path.join(os.path.dirname(__file__), "assets", "chevron_down.svg")
+        # 获取chevron_down.svg图标路径（使用资源路径辅助模块）
+        icon_path = get_assets_path("chevron_down.svg")
         
         # 第一行：搜索类型和内容 - 更紧凑的布局
         first_row = QHBoxLayout()
@@ -139,6 +120,7 @@ class SearchConditionWidget(QFrame):
                 image: url({icon_path.replace(chr(92), '/')});
                 width: 12px;
                 height: 12px;
+                border: none;
             }}
             QComboBox QAbstractItemView {{
                 background: #2d2d30;
@@ -584,78 +566,16 @@ class AdvancedSearchDialogQt(QDialog):
         self.and_btn = QPushButton(_('match_mode_and'))
         self.and_btn.setCheckable(True)
         self.and_btn.setChecked(True)
-        self.and_btn.setMinimumHeight(50)
-        self.and_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(40, 50, 65, 180),
-                    stop:1 rgba(30, 40, 55, 180));
-                color: rgba(200, 200, 200, 200);
-                border: 1px solid rgba(110, 165, 255, 60);
-                border-radius: 8px;
-                padding: 10px 20px;
-                font-weight: bold;
-                font-size: 9pt;
-                text-align: center;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(50, 60, 75, 200),
-                    stop:1 rgba(40, 50, 65, 200));
-                border: 1px solid rgba(110, 165, 255, 100);
-            }
-            QPushButton:checked {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(47, 129, 247, 220),
-                    stop:1 rgba(37, 109, 227, 220));
-                color: white;
-                border: 1px solid rgba(80, 160, 255, 180);
-            }
-            QPushButton:checked:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(57, 139, 255, 240),
-                    stop:1 rgba(47, 129, 247, 240));
-            }
-        """)
+        self.and_btn.setMinimumHeight(40)
+        apply_button_style(self.and_btn, 'green-toggle')
         self.and_btn.clicked.connect(lambda: self._set_search_mode(True))
         mode_layout.addWidget(self.and_btn, 1)
         
         # 模糊匹配按钮（包含说明在按钮内）
         self.or_btn = QPushButton(_('match_mode_or'))
         self.or_btn.setCheckable(True)
-        self.or_btn.setMinimumHeight(50)
-        self.or_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(40, 50, 65, 180),
-                    stop:1 rgba(30, 40, 55, 180));
-                color: rgba(200, 200, 200, 200);
-                border: 1px solid rgba(110, 165, 255, 60);
-                border-radius: 8px;
-                padding: 10px 20px;
-                font-weight: bold;
-                font-size: 9pt;
-                text-align: center;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(50, 60, 75, 200),
-                    stop:1 rgba(40, 50, 65, 200));
-                border: 1px solid rgba(110, 165, 255, 100);
-            }
-            QPushButton:checked {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(100, 200, 120, 220),
-                    stop:1 rgba(80, 180, 100, 220));
-                color: white;
-                border: 1px solid rgba(120, 220, 140, 180);
-            }
-            QPushButton:checked:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(110, 210, 130, 240),
-                    stop:1 rgba(90, 190, 110, 240));
-            }
-        """)
+        self.or_btn.setMinimumHeight(40)
+        apply_button_style(self.or_btn, 'pink-toggle')
         self.or_btn.clicked.connect(lambda: self._set_search_mode(False))
         mode_layout.addWidget(self.or_btn, 1)
         
@@ -666,10 +586,12 @@ class AdvancedSearchDialogQt(QDialog):
         
         # 左侧按钮
         add_btn = QPushButton(_('add_condition_button'))
+        apply_button_style(add_btn, 'blue-transparent')
         add_btn.clicked.connect(self._add_condition)
         button_layout.addWidget(add_btn)
         
         clear_btn = QPushButton(_('clear_all_button'))
+        apply_button_style(clear_btn, 'danger')
         clear_btn.clicked.connect(self._clear_all)
         button_layout.addWidget(clear_btn)
         
@@ -677,45 +599,12 @@ class AdvancedSearchDialogQt(QDialog):
         
         # 右侧按钮
         cancel_btn = QPushButton("✕ " + _('cancel'))
-        cancel_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(90, 90, 90, 200),
-                    stop:1 rgba(70, 70, 70, 200));
-                border: 1px solid rgba(110, 110, 110, 150);
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(110, 110, 110, 230),
-                    stop:1 rgba(90, 90, 90, 230));
-                border: 1px solid rgba(130, 130, 130, 180);
-            }
-        """)
+        apply_button_style(cancel_btn, 'danger')
         cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(cancel_btn)
         
         search_btn = QPushButton(_('search_button_icon'))
-        search_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(50, 200, 100, 220),
-                    stop:1 rgba(40, 180, 90, 220));
-                border: 1px solid rgba(70, 220, 120, 180);
-                font-size: 11pt;
-                padding: 8px 24px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(60, 210, 110, 250),
-                    stop:1 rgba(50, 190, 100, 250));
-                border: 1px solid rgba(80, 230, 130, 220);
-            }
-            QPushButton:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(40, 180, 90, 255),
-                    stop:1 rgba(30, 160, 80, 255));
-            }
-        """)
+        apply_button_style(search_btn, 'solid-blue')
         search_btn.clicked.connect(self._execute_search)
         button_layout.addWidget(search_btn)
         

@@ -1,81 +1,48 @@
-# FSmatbinBD V1.1 - 3D材质库查询管理系统
+# FSMatbinBD - FromSoftware Material Database Browser
 
-一个基于Python的3D材质库查询和管理工具，专为游戏开发者和3D艺术家设计，支持材质数据的查询、导入、导出和批量处理。
+[![Build and Release](https://github.com/ccccxp/FSmatbinBD/actions/workflows/release.yml/badge.svg)](https://github.com/ccccxp/FSmatbinBD/actions/workflows/release.yml)
 
-## 🚀 核心功能
+[中文版](README_CN.md)
 
-- **🔍 智能材质搜索**: 快速查找和浏览材质库中的材质资源
-- **📊 可视化材质预览**: 直观显示材质属性和参数信息
-- **📁 批量文件处理**: 支持材质文件的批量导入和导出
-- **📦 BND文件批量解压**: 基于WitchyBND的高效批量解压功能
-- **�️ 数据库管理**: SQLite数据库存储，支持备份和恢复
-- **🌐 双语界面**: 完整的中英文界面支持
-- **🎨 现代化UI**: 清晰易用的图形界面设计
+A desktop tool for browsing, searching, and managing material data from FromSoftware games (Elden Ring, Sekiro, etc.).
 
-## 📋 使用要求
+## ✨ Features
 
-- **Python 3.7+**
-- **操作系统**: Windows 10/11 (推荐)
-- **内存**: 建议4GB以上RAM
-- **存储空间**: 至少1GB可用空间
+- **Material Library Management**: Import DCX files, auto-parse and build local database
+- **Fast Search**: Keyword search, advanced filters (shader path, sampler type, etc.)
+- **Material Matching**: Smart matching of similar materials for replacement assistance
+- **Batch Operations**: Bulk texture path replacement and more
+- **High Performance**: 8-thread concurrent import for lightning-fast processing
 
-## 🛠️ 安装和使用
+## 🚀 Quick Start
 
-### 快速启动
+### Download Release
+Download the latest `.zip` from [Releases](https://github.com/ccccxp/FSmatbinBD/releases), extract and run `FSMatbinBD.exe`.
 
-1. **下载项目**并解压到本地目录
-2. **双击运行**以下文件之一：
-   - `FSmatbinBD.bat` (Windows批处理)
-   - `start_matbin_library.ps1` (PowerShell脚本)
-   - 或直接运行 `python main.py`
+### Run from Source
+```bash
+pip install -r requirements.txt
+python qt_main.py
+```
 
-### 基本操作
+## 📦 Build
+```bash
+python build_app.py
+```
+Output in `dist/FSMatbinBD/`.
 
-1. **启动程序**: 运行上述启动文件，等待界面加载
-2. **浏览材质**: 在主界面中浏览已导入的材质库
-3. **搜索材质**: 使用搜索框快速定位特定材质
-4. **导入材质**: 点击导入按钮，选择材质文件进行批量导入
-5. **导出数据**: 将选中的材质数据导出为所需格式
+## 📁 Structure
+```
+├── src/                  # Source code
+│   ├── core/             # Business logic
+│   └── gui_qt/           # PySide6 GUI
+├── tools/                # External tools (WitchyBND)
+├── data/databases/       # Local material database
+└── .github/workflows/    # CI/CD
+```
 
-## ⚠️ 重要注意事项
+## 🔧 Tech Stack
+- Python 3.11+ | PySide6 (Qt6) | SQLite | PyInstaller
 
-### WitchyBND工具配置
-
-**批量解压功能依赖于WitchyBND工具**，使用前请：
-
-1. **下载WitchyBND**: 访问 [WitchyBND官方仓库](https://github.com/ividyon/WitchyBND)
-2. **放置位置**: 将下载的WitchyBND.exe文件放置在项目的 `tools/WitchyBND/` 文件夹下
-3. **验证安装**: 确保 `tools/WitchyBND/WitchyBND.exe` 文件存在且可执行
-
-### 使用提醒
-
-- **数据备份**: 建议定期备份数据库文件 (`data/databases/materials.db`)
-- **文件路径**: 避免使用包含特殊字符的文件路径
-- **内存使用**: 处理大批量文件时可能消耗较多内存，建议关闭其他不必要的应用程序
-- **权限要求**: 某些操作可能需要管理员权限
-
-## 🎯 主要界面说明
-
-- **材质列表面板**: 显示所有已导入的材质，支持排序和筛选
-- **材质详情面板**: 查看选中材质的详细信息和参数
-- **采样器面板**: 管理和配置材质采样器
-- **工具面板**: 提供批量操作和数据管理功能
-
-## 🙏 致谢
-
-本项目的批量解压功能基于优秀的开源项目 **WitchyBND**，特别感谢：
-
-- **WitchyBND项目**: [https://github.com/ividyon/WitchyBND](https://github.com/ividyon/WitchyBND)
-- **作者**: ividyon
-
-## 📞 支持与反馈
-
-如遇到问题或有改进建议，请通过以下方式联系：
-
-- **GitHub Issues**: 在本仓库提交问题报告
-- **功能建议**: 欢迎提出新功能需求
-- **Bug报告**: 详细描述问题复现步骤
-
----
-
-**注意**: 本软件为开源项目，仅供学习和研究使用。使用过程中请遵守相关法律法规。
+## 📄 License
+MIT License

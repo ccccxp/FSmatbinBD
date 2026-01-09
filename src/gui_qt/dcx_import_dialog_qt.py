@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Optional, Dict, Any
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal, QTimer
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -23,7 +23,9 @@ from src.core.i18n import _
 
 
 class _DCXImportWorker(QThread):
+    """带进度回调的DCX导入工作线程"""
     finishedResult = Signal(dict)
+    progressUpdate = Signal(str, int, int)  # (阶段名称, 当前进度, 总数)
 
     def __init__(self, database, dcx_file: str, library_name: str, description: str):
         super().__init__()
@@ -32,12 +34,21 @@ class _DCXImportWorker(QThread):
         self._library_name = library_name
         self._description = description
 
+    def _progress_callback(self, stage: str, current: int, total: int):
+        """进度回调，从后台线程发送信号到主线程"""
+        self.progressUpdate.emit(stage, current, total)
+
     def run(self):
         try:
             from src.core.witchybnd_processor import MaterialLibraryImporter
 
             importer = MaterialLibraryImporter(self._database)
-            result = importer.import_from_dcx(self._dcx_file, self._library_name, self._description)
+            result = importer.import_from_dcx(
+                self._dcx_file, 
+                self._library_name, 
+                self._description,
+                progress_callback=self._progress_callback
+            )
             if not isinstance(result, dict):
                 result = {
                     "success": False,
@@ -60,10 +71,11 @@ class _DCXImportWorker(QThread):
 class DCXImportDialogQt(QDialog):
     """Qt版 DCX 材质库导入对话框。
 
-    对齐旧版 Tk 的 `DCXImportDialog`：
+    特性：
     - 选择 DCX 文件
     - 输入库名称/描述
-    - 显示导入进度（简化：不细分阶段，仅显示忙碌状态）
+    - 显示详细的分阶段进度
+    - 动态进度条动画
     - 后台线程调用 `MaterialLibraryImporter.import_from_dcx`
     """
 
@@ -76,14 +88,19 @@ class DCXImportDialogQt(QDialog):
         from .dark_titlebar import apply_dark_titlebar_to_dialog
         apply_dark_titlebar_to_dialog(self)
         
-        apply_dark_titlebar_to_dialog(self)
-        
         self.setWindowTitle(_('import_dcx_title'))
         self.setModal(True)
         self.resize(720, 560)
 
         self._database = database
         self._worker: Optional[_DCXImportWorker] = None
+        
+        # 动画相关
+        self._animation_timer: Optional[QTimer] = None
+        self._animation_value = 0
+        self._animation_direction = 1
+        self._current_stage = ""
+        self._has_real_progress = False
 
         self._build_ui()
 
@@ -110,7 +127,7 @@ class DCXImportDialogQt(QDialog):
         self.dcx_path_edit = QLineEdit()
         self.dcx_path_edit.setPlaceholderText(_('select_dcx_placeholder'))
         browse_btn = QPushButton(_('browse_button'))
-        browse_btn.setObjectName("standard")
+        browse_btn.setObjectName("glass")
         browse_btn.clicked.connect(self._choose_dcx)
         file_layout.addWidget(self.dcx_path_edit, 1)
         file_layout.addWidget(browse_btn)
@@ -134,21 +151,54 @@ class DCXImportDialogQt(QDialog):
 
         layout.addWidget(info_box)
 
-        self.progress_label = QLabel(_('waiting_start'))
+        # 进度区域 - 包含阶段标签和详细进度
+        progress_box = QGroupBox(_('import_progress'))
+        progress_box.setStyleSheet(
+            "QGroupBox { background-color:#0d1222; border:1px solid #313b5c; border-radius:10px; margin-top:12px; padding:12px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left:12px; padding:0 6px; background-color:#0d1222; }"
+        )
+        progress_layout = QVBoxLayout(progress_box)
+        
+        # 当前阶段标签
+        self.stage_label = QLabel(_('waiting_start'))
+        self.stage_label.setStyleSheet("color:#58a6ff; font-weight: bold; font-size: 11pt;")
+        progress_layout.addWidget(self.stage_label)
+        
+        # 详细进度标签
+        self.progress_label = QLabel("")
         self.progress_label.setStyleSheet("color:#9ca9c5;")
-        layout.addWidget(self.progress_label)
+        progress_layout.addWidget(self.progress_label)
 
+        # 进度条
         self.progress = QProgressBar()
-        self.progress.setRange(0, 1)
+        self.progress.setRange(0, 100)
         self.progress.setValue(0)
-        self.progress.setTextVisible(False)
-        layout.addWidget(self.progress)
+        self.progress.setTextVisible(True)
+        self.progress.setFormat("%p%")
+        self.progress.setStyleSheet("""
+            QProgressBar {
+                border: 1px solid #313b5c;
+                border-radius: 5px;
+                background-color: #1a1f35;
+                text-align: center;
+                color: #ffffff;
+                height: 20px;
+            }
+            QProgressBar::chunk {
+                background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #238636, stop:1 #2ea043);
+                border-radius: 4px;
+            }
+        """)
+        progress_layout.addWidget(self.progress)
+        
+        layout.addWidget(progress_box)
 
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
 
         self.cancel_btn = QPushButton(_('cancel'))
-        self.cancel_btn.setObjectName("ghost")
+        self.cancel_btn.setObjectName("glass")
         self.cancel_btn.clicked.connect(self.reject)
         btn_row.addWidget(self.cancel_btn)
 
@@ -168,11 +218,81 @@ class DCXImportDialogQt(QDialog):
             base = os.path.splitext(os.path.basename(file_path))[0]
             self.name_edit.setText(base)
 
+    def _start_animation(self):
+        """启动进度条动画（用于没有实际进度的阶段）"""
+        if self._animation_timer is None:
+            self._animation_timer = QTimer(self)
+            self._animation_timer.timeout.connect(self._animate_progress)
+        
+        # 进入定制忙碌模式（隐藏文字，使用自定义动画）
+        self.progress.setTextVisible(False)
+        self._animation_value = 0
+        self._animation_timer.start(20)  # 更流畅的动画 (20ms)
+        
+    def _stop_animation(self):
+        """停止进度条动画"""
+        if self._animation_timer:
+            self._animation_timer.stop()
+        # 恢复正常模式
+        self.progress.setTextVisible(True)
+            
+    def _animate_progress(self):
+        """进度条动画效果 - 自定义循环移动（从左到右循环）"""
+        if self._has_real_progress:
+            return
+            
+        # 锯齿波循环 (0 -> 100 -> 0)
+        self._animation_value += 1
+        if self._animation_value > 100:
+            self._animation_value = 0
+            
+        self.progress.setValue(self._animation_value)
+
     def _set_busy(self, busy: bool):
         self.start_btn.setEnabled(not busy)
         self.cancel_btn.setEnabled(not busy)
-        self.progress.setValue(1 if busy else 0)
-        self.progress_label.setText(_('importing_wait') if busy else _('waiting_start'))
+        if busy:
+            self.progress.setRange(0, 100)
+            self.progress.setValue(0)
+            self.stage_label.setText(_('importing_wait'))
+            self.progress_label.setText("")
+            self._has_real_progress = False
+            self._start_animation()
+        else:
+            self._stop_animation()
+            self.progress.setValue(0)
+            self.stage_label.setText(_('waiting_start'))
+            self.progress_label.setText("")
+
+    def _on_progress(self, stage: str, current: int, total: int):
+        """处理进度更新"""
+        # 翻译阶段名称 - 使用 i18n 翻译键
+        stage_translations = {
+            "解包DCX文件": _('stage_extract_dcx'),
+            "转换材质文件": _('stage_convert_matbin'), 
+            "解析XML文件": _('stage_parse_xml'),
+            "写入数据库": _('stage_write_db'),
+            "清理临时文件": _('stage_cleanup'),
+        }
+        display_stage = stage_translations.get(stage, f"⏳ {stage}")
+        
+        # 更新阶段标签
+        self.stage_label.setText(display_stage)
+        self._current_stage = stage
+        
+        if total > 0 and total > 1:
+            # 有实际进度数据
+            self._has_real_progress = True
+            self._stop_animation()
+            percent = int((current / total) * 100)
+            self.progress.setValue(percent)
+            self.progress_label.setText(_('progress_format').format(current=current, total=total))
+        else:
+            # 没有详细进度，使用动画
+            self._has_real_progress = False
+            if not self._animation_timer or not self._animation_timer.isActive():
+                self._start_animation()
+            self.progress_label.setText(_('processing'))
 
     def _start(self):
         dcx_file = self.dcx_path_edit.text().strip()
@@ -180,7 +300,7 @@ class DCXImportDialogQt(QDialog):
         desc = self.desc_edit.toPlainText().strip()
 
         if not dcx_file:
-            QMessageBox.warning(self, "导入DCX", please_select_dcx)
+            QMessageBox.warning(self, _('import_dcx_title'), _('please_select_dcx_file'))
             return
         if not os.path.exists(dcx_file):
             QMessageBox.warning(self, _('import_dcx_title'), _('file_not_found') + f": {dcx_file}")
@@ -191,6 +311,7 @@ class DCXImportDialogQt(QDialog):
 
         self._set_busy(True)
         self._worker = _DCXImportWorker(self._database, dcx_file, lib_name, desc)
+        self._worker.progressUpdate.connect(self._on_progress)
         self._worker.finishedResult.connect(self._on_finished)
         self._worker.start()
 

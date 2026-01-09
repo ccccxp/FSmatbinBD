@@ -1,0 +1,227 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # 当推送 v* 格式的 tag 时触发（如 v1.0.0, v1.1.0）
+    branches:
+      - main  # main 分支推送时也构建（但不发布）
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:  # 允许手动触发
+    inputs:
+      version:
+        description: '版本号 (如 1.1.2)'
+        required: false
+        default: ''
+      create_release:
+        description: '创建 GitHub Release'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  APP_NAME: FSMatbinBD
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  build:
+    name: Build Windows Executable
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # 获取完整历史
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+        
+    - name: Get version and update version.json
+      id: version
+      shell: pwsh
+      run: |
+        # 读取当前 version.json
+        $versionJsonPath = "version.json"
+        if (Test-Path $versionJsonPath) {
+          $versionConfig = Get-Content -Path $versionJsonPath -Raw | ConvertFrom-Json
+          $version = $versionConfig.version
+        } else {
+          $version = "dev"
+        }
+        
+        # 从标签获取版本（如果是标签触发），优先级高于配置文件
+        if ("${{ github.ref }}" -match "refs/tags/v(.+)") {
+          $version = $matches[1]
+        }
+        
+        # 手动输入版本号优先级最高
+        if ("${{ github.event.inputs.version }}" -ne "") {
+          $version = "${{ github.event.inputs.version }}"
+        }
+        
+        # 获取当前日期
+        $buildDate = Get-Date -Format "yyyy-MM-dd"
+        
+        # 更新 version.json
+        $versionConfig = @{
+          version = $version
+          build_date = $buildDate
+          app_name = "${{ env.APP_NAME }}"
+          description = "FromSoftware Material Binary Database"
+        }
+        $versionConfig | ConvertTo-Json -Depth 10 | Set-Content -Path $versionJsonPath -Encoding UTF8
+        
+        Write-Host "✓ Version: $version"
+        Write-Host "✓ Build Date: $buildDate"
+        Write-Host "✓ Updated version.json"
+        
+        echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+        echo "BUILD_DATE=$buildDate" >> $env:GITHUB_OUTPUT
+        
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller FSMatbinBD.spec --noconfirm
+      env:
+        PYTHONOPTIMIZE: 1
+        
+    - name: Verify build
+      shell: pwsh
+      run: |
+        $exePath = "dist/${{ env.APP_NAME }}/${{ env.APP_NAME }}.exe"
+        if (Test-Path $exePath) {
+          $size = (Get-Item $exePath).Length / 1MB
+          Write-Host "✓ Build successful: $exePath"
+          Write-Host "✓ File size: $([math]::Round($size, 2)) MB"
+        } else {
+          Write-Error "✗ Build failed: executable not found"
+          exit 1
+        }
+        
+    - name: Prepare release package
+      shell: pwsh
+      run: |
+        $version = "${{ steps.version.outputs.VERSION }}"
+        
+        # 复制 README 和配置文件
+        Copy-Item README.md dist/${{ env.APP_NAME }}/ -ErrorAction SilentlyContinue
+        Copy-Item README_中文.md dist/${{ env.APP_NAME }}/ -ErrorAction SilentlyContinue
+        
+        # 确保数据目录结构存在
+        New-Item -ItemType Directory -Force -Path dist/${{ env.APP_NAME }}/data/databases | Out-Null
+        New-Item -ItemType Directory -Force -Path dist/${{ env.APP_NAME }}/temp | Out-Null
+        New-Item -ItemType Directory -Force -Path dist/${{ env.APP_NAME }}/output | Out-Null
+        New-Item -ItemType Directory -Force -Path dist/${{ env.APP_NAME }}/logs | Out-Null
+        
+        # 创建 .gitkeep 文件
+        New-Item -ItemType File -Force -Path dist/${{ env.APP_NAME }}/data/databases/.gitkeep | Out-Null
+        
+    - name: Create ZIP archive
+      shell: pwsh
+      run: |
+        $version = "${{ steps.version.outputs.VERSION }}"
+        $zipName = "${{ env.APP_NAME }}_v${version}_Windows_x64.zip"
+        Compress-Archive -Path dist/${{ env.APP_NAME }}/* -DestinationPath $zipName -Force
+        
+        # 显示包信息
+        $zipSize = (Get-Item $zipName).Length / 1MB
+        Write-Host "✓ Package: $zipName"
+        Write-Host "✓ Size: $([math]::Round($zipSize, 2)) MB"
+        
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.APP_NAME }}_v${{ steps.version.outputs.VERSION }}_Windows_x64
+        path: ${{ env.APP_NAME }}_v${{ steps.version.outputs.VERSION }}_Windows_x64.zip
+        retention-days: 30
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    # 仅在推送标签或手动触发且选择创建发布时运行
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
+    
+    permissions:
+      contents: write
+      
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Get version
+      id: version
+      run: |
+        if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          VERSION="${GITHUB_REF#refs/tags/v}"
+        elif [[ -n "${{ github.event.inputs.version }}" ]]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION="dev"
+        fi
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+        
+    - name: Download artifact
+      uses: actions/download-artifact@v4
+      with:
+        pattern: ${{ env.APP_NAME }}_*
+        merge-multiple: true
+        
+    - name: List release files
+      run: |
+        echo "Release files:"
+        ls -la *.zip || echo "No zip files found"
+        
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: FSMatbinBD v${{ steps.version.outputs.VERSION }}
+        tag_name: v${{ steps.version.outputs.VERSION }}
+        body: |
+          ## FSMatbinBD v${{ steps.version.outputs.VERSION }}
+          
+          ### 📦 下载
+          
+          | 平台 | 文件 | 说明 |
+          |------|------|------|
+          | Windows x64 | `FSMatbinBD_v${{ steps.version.outputs.VERSION }}_Windows_x64.zip` | 64位 Windows 系统 |
+          
+          ### 🚀 安装说明
+          
+          1. 下载上方对应平台的压缩包
+          2. 解压到任意目录
+          3. 运行 `FSMatbinBD.exe`
+          
+          ### ⚠️ 注意事项
+          
+          - 首次运行会自动创建数据目录 (`data/databases/`)
+          - 如需使用 DCX 导入功能，请确保 `tools/WitchyBND/` 目录完整
+          - 支持中文和英文界面，可在设置中切换
+          
+          ### 📝 系统要求
+          
+          - Windows 10/11 (64位)
+          - 无需安装 Python 或其他依赖
+          
+          ### 🔄 更新内容
+          
+          请查看 [更新日志](CHANGELOG.md) 获取详细信息。
+          
+        files: |
+          *.zip
+        draft: false
+        prerelease: ${{ contains(steps.version.outputs.VERSION, 'beta') || contains(steps.version.outputs.VERSION, 'alpha') || contains(steps.version.outputs.VERSION, 'rc') }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

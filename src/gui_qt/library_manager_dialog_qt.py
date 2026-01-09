@@ -111,7 +111,7 @@ class LibraryManagerDialogQt(QDialog):
         
         self._version_tag = version_tag
         self._add_library_callback = add_library_callback
-        title = _('library_manager_button') + (f"  [{version_tag}]" if version_tag else "")
+        title = _('library_manager_button')
         self.setWindowTitle(title)
         self.resize(760, 520)
 
@@ -160,22 +160,36 @@ class LibraryManagerDialogQt(QDialog):
         root.addLayout(btn_row)
 
         self.add_btn = QPushButton(_('add_library_button_ellipsis'))
+        self.add_btn.setObjectName("glass")
         self.refresh_btn = QPushButton(_('menu_refresh'))
+        self.refresh_btn.setObjectName("glass")
         self.edit_btn = QPushButton(_('menu_edit'))
+        self.edit_btn.setObjectName("glass")
+        self.move_up_btn = QPushButton(_('move_up'))
+        self.move_up_btn.setObjectName("green-glass")
+        self.move_down_btn = QPushButton(_('move_down'))
+        self.move_down_btn.setObjectName("pink-glass")
         self.delete_btn = QPushButton(_('delete'))
+        self.delete_btn.setObjectName("danger")
         btn_row.addWidget(self.add_btn)
         btn_row.addWidget(self.refresh_btn)
         btn_row.addWidget(self.edit_btn)
+        btn_row.addWidget(self.move_up_btn)
+        btn_row.addWidget(self.move_down_btn)
         btn_row.addWidget(self.delete_btn)
         btn_row.addStretch(1)
         self.close_btn = QPushButton(_('close'))
+        self.close_btn.setObjectName("glass")
         btn_row.addWidget(self.close_btn)
 
         self.add_btn.clicked.connect(self._on_add_library)
         self.refresh_btn.clicked.connect(self.reload)
         self.edit_btn.clicked.connect(self._on_edit)
+        self.move_up_btn.clicked.connect(self._on_move_up)
+        self.move_down_btn.clicked.connect(self._on_move_down)
         self.delete_btn.clicked.connect(self._on_delete)
         self.close_btn.clicked.connect(self.accept)
+        self.table.selectionModel().selectionChanged.connect(self._update_move_button_states)
 
         if not callable(self._add_library_callback):
             self.add_btn.setEnabled(False)
@@ -217,18 +231,88 @@ class LibraryManagerDialogQt(QDialog):
             return None
         return self._model.library_at(idx.row())
 
+    def _update_move_button_states(self):
+        """根据当前选中行更新上移/下移按钮状态"""
+        idx = self.table.currentIndex()
+        row_count = self._model.rowCount()
+        
+        if not idx.isValid() or row_count == 0:
+            self.move_up_btn.setEnabled(False)
+            self.move_down_btn.setEnabled(False)
+            return
+        
+        current_row = idx.row()
+        self.move_up_btn.setEnabled(current_row > 0)
+        self.move_down_btn.setEnabled(current_row < row_count - 1)
+
+    def _on_move_up(self):
+        """将当前选中的库上移一位"""
+        idx = self.table.currentIndex()
+        if not idx.isValid() or idx.row() == 0:
+            return
+        
+        current_row = idx.row()
+        current_lib = self._model.library_at(current_row)
+        prev_lib = self._model.library_at(current_row - 1)
+        
+        if current_lib is None or prev_lib is None:
+            return
+        
+        try:
+            if hasattr(self._db, "swap_library_order"):
+                self._db.swap_library_order(current_lib.id, prev_lib.id)
+            else:
+                QMessageBox.warning(self, _('error'), "数据库不支持排序功能")
+                return
+        except Exception as exc:
+            QMessageBox.warning(self, _('error'), str(exc))
+            return
+        
+        self.reload()
+        self.table.selectRow(current_row - 1)
+        self._emit_changed()
+
+    def _on_move_down(self):
+        """将当前选中的库下移一位"""
+        idx = self.table.currentIndex()
+        row_count = self._model.rowCount()
+        if not idx.isValid() or idx.row() >= row_count - 1:
+            return
+        
+        current_row = idx.row()
+        current_lib = self._model.library_at(current_row)
+        next_lib = self._model.library_at(current_row + 1)
+        
+        if current_lib is None or next_lib is None:
+            return
+        
+        try:
+            if hasattr(self._db, "swap_library_order"):
+                self._db.swap_library_order(current_lib.id, next_lib.id)
+            else:
+                QMessageBox.warning(self, _('error'), "数据库不支持排序功能")
+                return
+        except Exception as exc:
+            QMessageBox.warning(self, _('error'), str(exc))
+            return
+        
+        self.reload()
+        self.table.selectRow(current_row + 1)
+        self._emit_changed()
+
     def _on_delete(self):
         row = self._selected_library_row()
         if row is None:
             return
 
-        ok = QMessageBox.question(
+        from src.gui_qt.standard_dialogs import show_confirm_dialog
+        ok = show_confirm_dialog(
             self,
             _('delete_library'),
             _('delete_library_confirm_msg').format(row.name),
-            QMessageBox.Yes | QMessageBox.No,
+            confirm_style='danger'
         )
-        if ok != QMessageBox.Yes:
+        if not ok:
             return
 
         try:
@@ -293,6 +377,7 @@ class LibraryManagerDialogQt(QDialog):
         path_edit = QLineEdit(str(raw.get("source_path") or raw.get("path") or ""))
         path_edit.setPlaceholderText(_('library_path_label'))
         browse_btn = QPushButton(_('browse_button'))
+        browse_btn.setObjectName("glass")
         path_row.addWidget(path_edit, 1)
         path_row.addWidget(browse_btn)
         root.addLayout(path_row)
@@ -313,7 +398,9 @@ class LibraryManagerDialogQt(QDialog):
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
         cancel_btn = QPushButton(_('cancel'))
+        cancel_btn.setObjectName("glass")
         ok_btn = QPushButton(_('save'))
+        ok_btn.setObjectName("primary")
         btn_row.addWidget(cancel_btn)
         btn_row.addWidget(ok_btn)
         root.addLayout(btn_row)

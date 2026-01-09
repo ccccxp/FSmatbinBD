@@ -250,6 +250,7 @@ class LanguageManager:
             # 对话框
             'confirm': '确认',
             'cancel': '取消',
+            'discard_changes': '不保存',
             'yes': '是',
             'no': '否',
             'ok': '确定',
@@ -364,6 +365,13 @@ class LanguageManager:
             'about_tech_stack': '技术栈',
             'about_developer': '开发者',
             'about_date': '日期',
+            'about_buy_coffee': '请我喝杯咖啡',
+            'about_coffee_desc': '如果这个工具对你有帮助，可以请我喝杯咖啡~',
+            'about_wechat_pay': '微信支付',
+            'about_alipay': '支付宝',
+            'about_qr_unavailable': '二维码不可用',
+            'about_rights': '保留所有权利',
+            'close_button': '关闭',
             
             # 材质匹配对话框
             'matching_dialog_title': '材质匹配',
@@ -541,6 +549,10 @@ class LanguageManager:
             'multiple_materials_found': '找到多个匹配材质，请选择：',
             'select_material': '选择材质',
             'material_selected': '已选择材质: {name}',
+            
+            # 日志查看
+            'show_log': '显示日志',
+            'matching_log': '匹配日志',
             'matching_in_progress': '正在匹配中...',
             'matching_completed': '匹配完成，找到 {count} 个结果',
             'matching_failed': '匹配失败',
@@ -636,6 +648,10 @@ class LanguageManager:
             
             # 匹配结果显示
             'perfect_match': '完美匹配',
+            'adjacent_match': '相邻匹配',
+            'unmatched': '未匹配',
+            'uncovered': '未覆盖',
+            'empty': '空',
             'source_material_prefix': '源:',
             
             # 匹配详情
@@ -671,7 +687,7 @@ class LanguageManager:
             'unit_count': '个',
             
             # Additional Keys for Qt GUI
-            'app_title_full': 'FSmatbinBD - 材质库查询管理系统 v1.1',
+            'app_title_full': 'FSmatbinBD - 材质库查询管理系统',
             'search_placeholder_full': '搜索文件名 / Shader / 参数…',
             'menu_library_manager_icon': '📚 库管理',
             'dark_titlebar_failed': '设置深色标题栏失败: {e}',
@@ -724,6 +740,16 @@ class LanguageManager:
             'import_dcx_success_msg': '导入成功：库ID={lib_id}，材质数量={count}',
             'import_dcx_failed_msg': '导入失败：{error}',
             'please_input_library_name': '请输入库名称',
+            
+            # DCX导入进度阶段
+            'import_progress': '导入进度',
+            'stage_extract_dcx': '📦 解包DCX文件',
+            'stage_convert_matbin': '🔄 转换材质文件 (MATBIN→XML)',
+            'stage_parse_xml': '📄 解析XML文件',
+            'stage_write_db': '💾 写入数据库',
+            'stage_cleanup': '🧹 清理临时文件',
+            'progress_format': '进度: {current} / {total}',
+            'processing': '处理中...',
 
             # Advanced Search
             'advanced_search_condition_title': "搜索条件 {0}",
@@ -845,6 +871,222 @@ class LanguageManager:
             'gradient_editor_title': '透明度渐变方向',
             'color_preview_label': '预览:',
             'use_system_picker': '🎨 使用系统取色器',
+            
+            # 材质替换功能
+            'material_replace_button': '材质替换',
+            'material_replace_title': '材质替换',
+            'material_replace_dialog_title': '材质替换',
+            
+            # 材质替换编辑器（新功能）
+            'material_replace_editor_title': '材质替换编辑器',
+            'import_json': '导入JSON',
+            'export_json': '导出JSON',
+            'undo': '撤销',
+            'redo': '重做',
+            'edit_texture': '编辑纹理',
+            'mtd_path': '材质路径',
+            'action': '操作',
+            'edit': '编辑',
+            'loaded_materials': '已加载材质',
+            'modified': '已修改',
+            'undo_steps': '可撤销步数',
+            'select_json_file': '选择JSON文件',
+            'import_error': '导入错误',
+            'import_failed': '导入失败',
+            'import_success': '导入成功',
+            'materials': '个材质',
+            'no_materials_to_export': '没有可导出的材质',
+            'save_json_file': '保存JSON文件',
+            'export_error': '导出错误',
+            'export_failed': '导出失败',
+            'export_success': '导出成功',
+            'unsaved_changes': '未保存的更改',
+            'unsaved_changes_import_confirm': '有未保存的更改，是否继续导入？',
+            'unsaved_changes_close_confirm': '有未保存的更改，是否保存后退出？',
+            'unsaved_changes_close_panel_confirm': '面板有未保存的更改，是否保存后关闭？',
+            'save_to_texture_edit': '保存到纹理编辑',
+            'save_texture_edit': '保存纹理编辑',
+            'saved': '已保存',
+            'update_material': '更新材质',
+            
+            # 纹理编辑面板
+            'texture_edit': '纹理编辑',
+            'path': '路径',
+            'texture_path_placeholder': '输入贴图路径...',
+            'show_more_parameters': '显示更多参数',
+            'material_path': '材质路径',
+            'batch_replace_material': '批量替换材质',
+            'search_result_count': '搜索到 {count}/{total} 个材质',
+            'select_target_material': '请选择目标材质...',
+            
+            # 路径来源提示
+            'path_from_user': '路径来自用户JSON文件',
+            'path_from_database': '路径来自数据库（材质无任何路径时自动填充）',
+            
+            # 应用材质对话框
+            'apply_material': '应用材质',
+            'apply_texture_path_question': '是否同时应用贴图路径？\n\n选择"是"将用数据库中的贴图路径覆盖当前路径。\n选择"否"仅应用采样器类型，保留当前路径。',
+            
+            # 批量替换对话框
+            'replace_configuration': '替换配置',
+            'current_material': '当前材质',
+            'replace_with': '替换为',
+            'search_material_placeholder': '搜索材质名或路径...',
+            'not_selected': '未选择',
+            'conversion_options': '转换选项',
+            'simplify_texture_path': '简化贴图路径',
+            'simplify_material_path': '简化材质路径',
+            'migrate_parameters': '迁移参数',
+            'start_replace': '开始替换',
+            'processing': '正在处理',
+            'completed': '完成',
+            'success': '成功',
+            'warnings': '警告',
+            'failures': '失败',
+            'apply_to_texture_edit': '应用到纹理编辑',
+            'close': '关闭',
+            'canceled': '已取消',
+            'failed': '失败',
+            'retry': '重试',
+            'replacement_preview': '替换预览',
+            'legend': '图例',
+            'no_match': '无匹配',
+            'confirm': '确认',
+            'cancel_running_confirm': '正在运行中，确定要取消吗？',
+            'search': '搜索',
+            'selected': '已选择',
+            'multi_select': '多选',
+            'current_samplers': '当前材质采样器',
+            'source_samplers': '源采样器',
+            'result_samplers': '替换后采样器',
+            'matched': '已匹配',
+            'not_found': '未找到',
+            'restore_source': '还原源材质',
+            'all_libraries': '全部库',
+            'library': '材质库',
+            'search_material': '搜索材质',
+            'search_material_for_samplers': '搜索材质获取采样器配置...',
+            'sampler_configuration': '采样器配置',
+            
+            # 状态图标和标签
+            'status_perfect_match': '🟢 精确匹配',
+            'status_adjacent_match': '🟡 相邻匹配',
+            'status_unmatched': '🔴 未匹配',
+            'status_uncovered': '🔵 未覆盖',
+            'status_empty': '⚪ 空路径',
+            
+            # 转换选项
+            'conversion_options': '转换选项',
+            'option_allow_adjacent': '允许相邻匹配',
+            'option_allow_adjacent_tip': '允许使用相邻采样器槽位匹配',
+            'option_keep_unmatched': '保留未匹配项',
+            'option_keep_unmatched_tip': '保留原路径，不替换',
+            'option_clear_unmatched': '清空未匹配项',
+            'option_clear_unmatched_tip': '将未匹配的采样器路径清空',
+            'option_clear_uncovered': '清空未覆盖项',
+            'option_clear_uncovered_tip': '清空目标库中不存在的采样器',
+            'option_preserve_empty': '保留空路径',
+            'option_preserve_empty_tip': '不对空路径采样器做任何修改',
+            'option_normalize_case': '归一化大小写',
+            'option_normalize_case_tip': '将路径统一为小写',
+            'option_normalize_separator': '归一化分隔符',
+            'option_normalize_separator_tip': '将反斜杠转为正斜杠',
+            'option_reorder_samplers': '重排序采样器',
+            'option_reorder_samplers_tip': '按目标库顺序重排采样器',
+            
+            # 对话框按钮
+            'btn_start_replace': '开始替换',
+            'btn_stop_replace': '停止',
+            'btn_export_result': '导出结果',
+            'btn_close': '关闭',
+            'btn_re_evaluate': '重新评估',
+            
+            # 预览区
+            'preview_title': '替换预览',
+            'preview_source_material': '源材质',
+            'preview_target_library': '目标库',
+            'preview_sampler_index': '序号',
+            'preview_sampler_type': '类型',
+            'preview_source_path': '源路径',
+            'preview_target_path': '目标路径',
+            'preview_match_status': '匹配状态',
+            
+            # Banner 消息
+            'banner_ready': '就绪：请选择源材质和目标库',
+            'banner_running': '正在处理中...',
+            'banner_completed': '替换完成：{perfect}个精确, {adjacent}个相邻, {unmatched}个未匹配',
+            'banner_canceled': '操作已取消',
+            'banner_failed': '操作失败: {error}',
+            
+            # 统计信息
+            'stats_total': '总计',
+            'stats_perfect': '精确',
+            'stats_adjacent': '相邻',
+            'stats_unmatched': '未匹配',
+            'stats_uncovered': '未覆盖',
+            'stats_empty': '空路径',
+            
+            # 警告和确认
+            'warning_order_mismatch': '警告：采样器顺序与目标库不一致',
+            'warning_uncovered_samplers': '警告：存在 {count} 个未覆盖的采样器',
+            'confirm_cancel': '确定要取消当前操作吗？',
+            'confirm_close_running': '正在处理中，确定要关闭吗？',
+            
+            # 错误消息
+            'error_no_source': '请选择源材质',
+            'error_no_target': '请选择目标库',
+            'error_replace_failed': '替换失败: {error}',
+            
+            # 手工微调
+            'manual_adjust': '手工微调',
+            'manual_adjust_tip': '双击单元格进行手动编辑',
+            
+            # 材质替换对话框额外键
+            'replace_dialog_title': '材质替换',
+            'replace_config_section': '替换配置',
+            'replace_current_material': '当前材质',
+            'replace_target_material': '目标材质',
+            'replace_search_target': '搜索目标材质...',
+            'replace_options_section': '转换选项',
+            'replace_opt_simplify_texture': '简化纹理路径',
+            'replace_opt_simplify_material': '简化材质路径',
+            'replace_opt_migrate_params': '迁移参数',
+            'replace_show_advanced': '显示高级选项',
+            'replace_opt_prefer_perfect': '优先精确匹配',
+            'replace_opt_prefer_marked': '优先标记覆盖',
+            'replace_opt_allow_adjust': '允许顺序调整',
+            'replace_opt_strict_order': '严格顺序验证',
+            'replace_opt_strict_order_hint': '采样器顺序与目标不同时警告',
+            'replace_btn_start': '开始替换',
+            'replace_btn_cancel': '取消',
+            'replace_btn_apply': '应用',
+            'replace_btn_close': '关闭',
+            'replace_preview_section': '替换预览',
+            'replace_source_samplers': '源采样器',
+            'replace_target_samplers': '目标采样器',
+            'replace_legend': '图例:',
+            'replace_order_adjusted': '顺序已调整',
+            'replace_empty_path': '(空)',
+            'replace_load_error': '加载材质库失败',
+            'replace_load_materials_error': '加载材质失败',
+            'replace_ready_hint': '选择源材质和目标库开始替换',
+            'replace_running': '正在处理替换...',
+            'replace_completed_summary': '完成：{ok}个匹配, {warn}个调整, {fail}个未匹配',
+            'replace_canceled': '操作已取消',
+            'replace_failed': '操作失败',
+            'replace_warning': '警告',
+            'replace_no_source': '请选择源材质',
+            'replace_no_target': '请选择目标库',
+            'replace_target_not_found': '未找到目标材质',
+            'replace_error': '错误',
+            'replace_confirm': '确认',
+            'replace_cancel_confirm': '确定要取消当前操作吗？',
+            'replace_progress': '进度：{current}/{total}',
+            'replace_uncovered_reason': '源材质未覆盖',
+            'replace_discard_edits': '放弃手动编辑？',
+            'replace_close_while_running': '正在处理中，确定要关闭吗？',
+            'replace_no_source_selected': '请选择源材质',
+            'replace_material_not_found': '未找到材质',
         }
     
     def _get_english_translations(self) -> Dict[str, str]:
@@ -1055,7 +1297,7 @@ class LanguageManager:
             'load_material_failed': 'Failed to load material',
 
             # Additional Keys for Qt GUI
-            'app_title_full': 'FSmatbinBD - Material Library Query System v1.1',
+            'app_title_full': 'FSmatbinBD - Material Library Query System',
             'search_placeholder_full': 'Search filename / Shader / Parameters...',
             'menu_library_manager_icon': '📚 Library Manager',
             'dark_titlebar_failed': 'Failed to set dark title bar: {e}',
@@ -1108,6 +1350,17 @@ class LanguageManager:
             'import_dcx_success_msg': 'Import Success: ID={lib_id}, Count={count}',
             'import_dcx_failed_msg': 'Import Failed: {error}',
             'please_input_library_name': 'Please input library name',
+            
+            # DCX Import Progress Stages
+            'import_progress': 'Import Progress',
+            'stage_extract_dcx': '📦 Extracting DCX File',
+            'stage_convert_matbin': '🔄 Converting Materials (MATBIN→XML)',
+            'stage_parse_xml': '📄 Parsing XML Files',
+            'stage_write_db': '💾 Writing to Database',
+            'stage_cleanup': '🧹 Cleaning Up Temp Files',
+            'progress_format': 'Progress: {current} / {total}',
+            'processing': 'Processing...',
+            
             'search_failed': 'Search failed',
             'add_library_failed': 'Failed to add material library',
             'operation_cancelled': 'Operation cancelled',
@@ -1200,6 +1453,13 @@ class LanguageManager:
             'about_tech_stack': 'Tech Stack',
             'about_developer': 'Developer',
             'about_date': 'Date',
+            'about_buy_coffee': 'Buy me a coffee',
+            'about_coffee_desc': 'If this tool helps you, consider buying me a coffee~',
+            'about_wechat_pay': 'WeChat Pay',
+            'about_alipay': 'Alipay',
+            'about_qr_unavailable': 'QR Code Unavailable',
+            'about_rights': 'All rights reserved',
+            'close_button': 'Close',
             
             # Material Matching Dialog
             'matching_dialog_title': 'Material Matching',
@@ -1655,6 +1915,188 @@ class LanguageManager:
             'gradient_editor_title': 'Transparency Direction',
             'color_preview_label': 'Preview:',
             'use_system_picker': '🎨 System Picker',
+            
+            # Material Replace Function
+            'material_replace_button': 'Material Replace',
+            'material_replace_title': 'Material Replace',
+            'material_replace_dialog_title': 'Material Replace',
+            
+            # Material Replace Editor (按设计文档V3)
+            'material_replace_editor_title': 'Material Replace Editor',
+            'import_json': 'Import JSON',
+            'export_json': 'Export JSON',
+            'select_json_file': 'Select JSON File',
+            'save_json_file': 'Save JSON File',
+            'import_error': 'Import Error',
+            'import_failed': 'Import Failed',
+            'export_error': 'Export Error',
+            'export_failed': 'Export Failed',
+            'material_name': 'Material Name',
+            'mtd_path': 'MTD Path',
+            'edit_texture': 'Edit Texture',
+            'search_material_placeholder': 'Search material name or path...',
+            'search_result_count': 'Found {count}/{total} materials',
+            'no_materials_to_export': 'No materials to export',
+            'unsaved_changes_warning': 'There are unsaved changes, do you want to save?',
+            
+            # Texture Edit Panel
+            'texture_editor_title': 'Texture Editor - {name}',
+            'sampler_configuration': 'Sampler Configuration',
+            'show_more_parameters': 'Show More Parameters',
+            'material_path': 'Material Path',
+            'batch_replace_material': 'Batch Replace Material',
+            'select_target_material': 'Please select target material...',
+            
+            # Path Source Hint
+            'path_from_user': 'Path from user JSON file',
+            'path_from_database': 'Path from database (auto-filled when material has no paths)',
+            
+            # Apply Material Dialog
+            'apply_material': 'Apply Material',
+            'apply_texture_path_question': 'Apply texture paths as well?\n\nSelect "Yes" to overwrite current paths with database paths.\nSelect "No" to apply sampler types only, keeping current paths.',
+            
+            # Batch Replace Dialog
+            'replace_configuration': 'Replace Configuration',
+            'current_material': 'Current Material',
+            'replace_with': 'Replace With',
+            'not_selected': 'Not Selected',
+            'conversion_options': 'Conversion Options',
+            'simplify_texture_path': 'Simplify Texture Path',
+            'simplify_material_path': 'Simplify Material Path',
+            'migrate_parameters': 'Migrate Parameters',
+            'start_replace': 'Start Replace',
+            'processing': 'Processing',
+            'completed': 'Completed',
+            'success': 'Success',
+            'warnings': 'Warnings',
+            'failures': 'Failures',
+            'apply_to_texture_edit': 'Apply to Texture Edit',
+            'canceled': 'Canceled',
+            'retry': 'Retry',
+            'replacement_preview': 'Replacement Preview',
+            'restore_source_material': 'Restore Source Material',
+            'source_samplers': 'Source Samplers',
+            'restore_source': 'Restore Source',
+            
+            # Status Icons and Labels
+            'status_perfect_match': '🟢 Perfect Match',
+            'status_adjacent_match': '🟡 Adjacent Match',
+            'status_unmatched': '🔴 Unmatched',
+            'status_uncovered': '🔵 Uncovered',
+            'status_empty': '⚪ Empty Path',
+            
+            # Conversion Options
+            'conversion_options': 'Conversion Options',
+            'option_allow_adjacent': 'Allow Adjacent Match',
+            'option_allow_adjacent_tip': 'Allow matching to adjacent sampler slots',
+            'option_keep_unmatched': 'Keep Unmatched',
+            'option_keep_unmatched_tip': 'Keep original path without replacing',
+            'option_clear_unmatched': 'Clear Unmatched',
+            'option_clear_unmatched_tip': 'Clear unmatched sampler paths',
+            'option_clear_uncovered': 'Clear Uncovered',
+            'option_clear_uncovered_tip': 'Clear samplers not in target library',
+            'option_preserve_empty': 'Preserve Empty Paths',
+            'option_preserve_empty_tip': 'Do not modify samplers with empty paths',
+            'option_normalize_case': 'Normalize Case',
+            'option_normalize_case_tip': 'Convert paths to lowercase',
+            'option_normalize_separator': 'Normalize Separator',
+            'option_normalize_separator_tip': 'Convert backslashes to forward slashes',
+            'option_reorder_samplers': 'Reorder Samplers',
+            'option_reorder_samplers_tip': 'Reorder samplers to match target library',
+            
+            # Dialog Buttons
+            'btn_start_replace': 'Start Replace',
+            'btn_stop_replace': 'Stop',
+            'btn_export_result': 'Export Results',
+            'btn_close': 'Close',
+            'btn_re_evaluate': 'Re-evaluate',
+            
+            # Preview Area
+            'preview_title': 'Replace Preview',
+            'preview_source_material': 'Source Material',
+            'preview_target_library': 'Target Library',
+            'preview_sampler_index': 'Index',
+            'preview_sampler_type': 'Type',
+            'preview_source_path': 'Source Path',
+            'preview_target_path': 'Target Path',
+            'preview_match_status': 'Match Status',
+            
+            # Banner Messages
+            'banner_ready': 'Ready: Select source material and target library',
+            'banner_running': 'Processing...',
+            'banner_completed': 'Complete: {perfect} perfect, {adjacent} adjacent, {unmatched} unmatched',
+            'banner_canceled': 'Operation canceled',
+            'banner_failed': 'Operation failed: {error}',
+            
+            # Statistics
+            'stats_total': 'Total',
+            'stats_perfect': 'Perfect',
+            'stats_adjacent': 'Adjacent',
+            'stats_unmatched': 'Unmatched',
+            'stats_uncovered': 'Uncovered',
+            'stats_empty': 'Empty',
+            
+            # Warnings and Confirmations
+            'warning_order_mismatch': 'Warning: Sampler order differs from target library',
+            'warning_uncovered_samplers': 'Warning: {count} uncovered samplers found',
+            'confirm_cancel': 'Are you sure you want to cancel?',
+            'confirm_close_running': 'Processing in progress. Are you sure you want to close?',
+            
+            # Error Messages
+            'error_no_source': 'Please select source material',
+            'error_no_target': 'Please select target library',
+            'error_replace_failed': 'Replace failed: {error}',
+            
+            # Manual Adjustment
+            'manual_adjust': 'Manual Adjust',
+            'manual_adjust_tip': 'Double-click cell to edit manually',
+            
+            # Material Replace Dialog Additional Keys
+            'replace_dialog_title': 'Material Replace',
+            'replace_config_section': 'Replacement Configuration',
+            'replace_current_material': 'Current Material',
+            'replace_target_material': 'Target Material',
+            'replace_search_target': 'Search target material...',
+            'replace_options_section': 'Conversion Options',
+            'replace_opt_simplify_texture': 'Simplify Texture Path',
+            'replace_opt_simplify_material': 'Simplify Material Path',
+            'replace_opt_migrate_params': 'Migrate Parameters',
+            'replace_show_advanced': 'Show Advanced Options',
+            'replace_opt_prefer_perfect': 'Prefer Perfect Match',
+            'replace_opt_prefer_marked': 'Prefer Marked Coverage',
+            'replace_opt_allow_adjust': 'Allow Order Adjustment',
+            'replace_opt_strict_order': 'Strict Order Validation',
+            'replace_opt_strict_order_hint': 'Warn if sampler order differs from target',
+            'replace_btn_start': 'Start Replace',
+            'replace_btn_cancel': 'Cancel',
+            'replace_btn_apply': 'Apply',
+            'replace_btn_close': 'Close',
+            'replace_preview_section': 'Replace Preview',
+            'replace_source_samplers': 'Source Samplers',
+            'replace_target_samplers': 'Target Samplers',
+            'replace_legend': 'Legend:',
+            'replace_order_adjusted': 'Order adjusted',
+            'replace_empty_path': '(Empty)',
+            'replace_load_error': 'Failed to load libraries',
+            'replace_load_materials_error': 'Failed to load materials',
+            'replace_ready_hint': 'Select source material and target library to start',
+            'replace_running': 'Processing replacement...',
+            'replace_completed_summary': 'Complete: {ok} matched, {warn} adjusted, {fail} unmatched',
+            'replace_canceled': 'Operation canceled',
+            'replace_failed': 'Operation failed',
+            'replace_warning': 'Warning',
+            'replace_no_source': 'Please select source material',
+            'replace_no_target': 'Please select target library',
+            'replace_target_not_found': 'Target material not found',
+            'replace_error': 'Error',
+            'replace_confirm': 'Confirm',
+            'replace_cancel_confirm': 'Are you sure you want to cancel the current operation?',
+            'replace_progress': 'Progress: {current}/{total}',
+            'replace_uncovered_reason': 'Not covered by source material',
+            'replace_discard_edits': 'Discard manual edits?',
+            'replace_close_while_running': 'Processing in progress. Are you sure you want to close?',
+            'replace_no_source_selected': 'Please select source material',
+            'replace_material_not_found': 'Material not found',
         }
     
     def _get_japanese_translations(self) -> Dict[str, str]:
@@ -2203,6 +2645,84 @@ class LanguageManager:
     'match_detail_perfect_match': '完全マッチ',
     'match_detail_source_prefix': 'ソース:',
     'unit_count': '個',
+    
+    # マテリアル置換機能
+    'material_replace_button': 'マテリアル置換',
+    'material_replace_title': 'マテリアル置換',
+    'material_replace_dialog_title': 'マテリアル置換',
+    
+    # ステータスアイコンとラベル
+    'status_perfect_match': '🟢 完全一致',
+    'status_adjacent_match': '🟡 隣接一致',
+    'status_unmatched': '🔴 未マッチ',
+    'status_uncovered': '🔵 未カバー',
+    'status_empty': '⚪ 空パス',
+    
+    # 変換オプション
+    'conversion_options': '変換オプション',
+    'option_allow_adjacent': '隣接マッチを許可',
+    'option_allow_adjacent_tip': '隣接サンプラースロットへのマッチを許可',
+    'option_keep_unmatched': '未マッチを保持',
+    'option_keep_unmatched_tip': '元のパスを保持し置換しない',
+    'option_clear_unmatched': '未マッチをクリア',
+    'option_clear_unmatched_tip': '未マッチのサンプラーパスをクリア',
+    'option_clear_uncovered': '未カバーをクリア',
+    'option_clear_uncovered_tip': 'ターゲットライブラリに存在しないサンプラーをクリア',
+    'option_preserve_empty': '空パスを保持',
+    'option_preserve_empty_tip': '空パスのサンプラーを変更しない',
+    'option_normalize_case': '大文字小文字を正規化',
+    'option_normalize_case_tip': 'パスを小文字に統一',
+    'option_normalize_separator': '区切り文字を正規化',
+    'option_normalize_separator_tip': 'バックスラッシュをスラッシュに変換',
+    'option_reorder_samplers': 'サンプラーを並べ替え',
+    'option_reorder_samplers_tip': 'ターゲットライブラリの順序に合わせて並べ替え',
+    
+    # ダイアログボタン
+    'btn_start_replace': '置換開始',
+    'btn_stop_replace': '停止',
+    'btn_export_result': '結果をエクスポート',
+    'btn_close': '閉じる',
+    'btn_re_evaluate': '再評価',
+    
+    # プレビューエリア
+    'preview_title': '置換プレビュー',
+    'preview_source_material': 'ソースマテリアル',
+    'preview_target_library': 'ターゲットライブラリ',
+    'preview_sampler_index': '番号',
+    'preview_sampler_type': 'タイプ',
+    'preview_source_path': 'ソースパス',
+    'preview_target_path': 'ターゲットパス',
+    'preview_match_status': 'マッチステータス',
+    
+    # バナーメッセージ
+    'banner_ready': '準備完了：ソースマテリアルとターゲットライブラリを選択',
+    'banner_running': '処理中...',
+    'banner_completed': '完了：{perfect}完全一致、{adjacent}隣接、{unmatched}未マッチ',
+    'banner_canceled': '操作がキャンセルされました',
+    'banner_failed': '操作失敗: {error}',
+    
+    # 統計情報
+    'stats_total': '合計',
+    'stats_perfect': '完全一致',
+    'stats_adjacent': '隣接',
+    'stats_unmatched': '未マッチ',
+    'stats_uncovered': '未カバー',
+    'stats_empty': '空パス',
+    
+    # 警告と確認
+    'warning_order_mismatch': '警告：サンプラーの順序がターゲットライブラリと異なります',
+    'warning_uncovered_samplers': '警告：{count}個の未カバーサンプラーがあります',
+    'confirm_cancel': '操作をキャンセルしますか？',
+    'confirm_close_running': '処理中です。閉じますか？',
+    
+    # エラーメッセージ
+    'error_no_source': 'ソースマテリアルを選択してください',
+    'error_no_target': 'ターゲットライブラリを選択してください',
+    'error_replace_failed': '置換失敗: {error}',
+    
+    # 手動調整
+    'manual_adjust': '手動調整',
+    'manual_adjust_tip': 'セルをダブルクリックして手動編集',
         }
     
     def _get_korean_translations(self) -> Dict[str, str]:
@@ -2754,6 +3274,84 @@ class LanguageManager:
             'match_detail_perfect_match': '완벽한 일치',
             'match_detail_source_prefix': '소스:',
             'unit_count': '개',
+            
+            # 재질 교체 기능
+            'material_replace_button': '재질 교체',
+            'material_replace_title': '재질 교체',
+            'material_replace_dialog_title': '재질 교체',
+            
+            # 상태 아이콘 및 라벨
+            'status_perfect_match': '🟢 완벽 일치',
+            'status_adjacent_match': '🟡 인접 일치',
+            'status_unmatched': '🔴 미매칭',
+            'status_uncovered': '🔵 미커버',
+            'status_empty': '⚪ 빈 경로',
+            
+            # 변환 옵션
+            'conversion_options': '변환 옵션',
+            'option_allow_adjacent': '인접 매칭 허용',
+            'option_allow_adjacent_tip': '인접 샘플러 슬롯 매칭 허용',
+            'option_keep_unmatched': '미매칭 유지',
+            'option_keep_unmatched_tip': '원래 경로를 유지하고 교체하지 않음',
+            'option_clear_unmatched': '미매칭 지우기',
+            'option_clear_unmatched_tip': '미매칭 샘플러 경로 지우기',
+            'option_clear_uncovered': '미커버 지우기',
+            'option_clear_uncovered_tip': '대상 라이브러리에 없는 샘플러 지우기',
+            'option_preserve_empty': '빈 경로 유지',
+            'option_preserve_empty_tip': '빈 경로 샘플러를 수정하지 않음',
+            'option_normalize_case': '대소문자 정규화',
+            'option_normalize_case_tip': '경로를 소문자로 통일',
+            'option_normalize_separator': '구분자 정규화',
+            'option_normalize_separator_tip': '백슬래시를 슬래시로 변환',
+            'option_reorder_samplers': '샘플러 재정렬',
+            'option_reorder_samplers_tip': '대상 라이브러리 순서에 맞게 재정렬',
+            
+            # 대화상자 버튼
+            'btn_start_replace': '교체 시작',
+            'btn_stop_replace': '중지',
+            'btn_export_result': '결과 내보내기',
+            'btn_close': '닫기',
+            'btn_re_evaluate': '재평가',
+            
+            # 미리보기 영역
+            'preview_title': '교체 미리보기',
+            'preview_source_material': '소스 재질',
+            'preview_target_library': '대상 라이브러리',
+            'preview_sampler_index': '번호',
+            'preview_sampler_type': '타입',
+            'preview_source_path': '소스 경로',
+            'preview_target_path': '대상 경로',
+            'preview_match_status': '매칭 상태',
+            
+            # 배너 메시지
+            'banner_ready': '준비: 소스 재질과 대상 라이브러리를 선택하세요',
+            'banner_running': '처리 중...',
+            'banner_completed': '완료: {perfect}개 완벽, {adjacent}개 인접, {unmatched}개 미매칭',
+            'banner_canceled': '작업이 취소되었습니다',
+            'banner_failed': '작업 실패: {error}',
+            
+            # 통계 정보
+            'stats_total': '총계',
+            'stats_perfect': '완벽',
+            'stats_adjacent': '인접',
+            'stats_unmatched': '미매칭',
+            'stats_uncovered': '미커버',
+            'stats_empty': '빈 경로',
+            
+            # 경고 및 확인
+            'warning_order_mismatch': '경고: 샘플러 순서가 대상 라이브러리와 다릅니다',
+            'warning_uncovered_samplers': '경고: {count}개의 미커버 샘플러가 있습니다',
+            'confirm_cancel': '취소하시겠습니까?',
+            'confirm_close_running': '처리 중입니다. 닫으시겠습니까?',
+            
+            # 오류 메시지
+            'error_no_source': '소스 재질을 선택하세요',
+            'error_no_target': '대상 라이브러리를 선택하세요',
+            'error_replace_failed': '교체 실패: {error}',
+            
+            # 수동 조정
+            'manual_adjust': '수동 조정',
+            'manual_adjust_tip': '셀을 더블클릭하여 수동 편집',
         }
     
     def get_text(self, key: str) -> str:

@@ -224,7 +224,8 @@ class AutoPackDialogQt(QDialog):
         stats_layout.addWidget(self.base_pack_dir_edit)
 
         browse_btn = QPushButton(_('browse_button'))
-        browse_btn.setObjectName("standard")
+        from src.gui_qt.standard_dialogs import apply_button_style
+        apply_button_style(browse_btn, 'orange-transparent')
         browse_btn.clicked.connect(self._choose_base_dir)
         stats_layout.addWidget(browse_btn)
 
@@ -277,45 +278,46 @@ class AutoPackDialogQt(QDialog):
         btn_row.setSpacing(8)
 
         # 全选/取消全选按钮
+        # 全选/取消全选按钮
         select_all_btn = QPushButton(_('select_all'))
-        select_all_btn.setObjectName("standard")
+        apply_button_style(select_all_btn, 'glass')
         select_all_btn.clicked.connect(lambda: self.model.select_all(True))
         btn_row.addWidget(select_all_btn)
 
         deselect_all_btn = QPushButton(_('deselect_all'))
-        deselect_all_btn.setObjectName("standard")
+        apply_button_style(deselect_all_btn, 'glass')
         deselect_all_btn.clicked.connect(lambda: self.model.select_all(False))
         btn_row.addWidget(deselect_all_btn)
 
         add_xml_btn = QPushButton(_('add_xml_button_text'))
-        add_xml_btn.setObjectName("standard")
+        apply_button_style(add_xml_btn, 'glass')
         add_xml_btn.clicked.connect(self._add_xml)
         btn_row.addWidget(add_xml_btn)
 
         set_target_btn = QPushButton(_('set_selected'))
-        set_target_btn.setObjectName("standard")
+        apply_button_style(set_target_btn, 'glass')
         set_target_btn.clicked.connect(self._set_target_path)
         btn_row.addWidget(set_target_btn)
 
         remove_btn = QPushButton(_('remove_selected'))
-        remove_btn.setObjectName("ghost")
+        apply_button_style(remove_btn, 'danger')
         remove_btn.clicked.connect(self._remove_selected)
         btn_row.addWidget(remove_btn)
 
         btn_row.addStretch(1)
 
         refresh_btn = QPushButton(_('menu_refresh'))
-        refresh_btn.setObjectName("standard")
+        apply_button_style(refresh_btn, 'glass')
         refresh_btn.clicked.connect(self.reload)
         btn_row.addWidget(refresh_btn)
 
         exec_btn = QPushButton(_('execute_pack'))
-        exec_btn.setObjectName("primary")
+        apply_button_style(exec_btn, 'solid-blue')
         exec_btn.clicked.connect(self._execute)
         btn_row.addWidget(exec_btn)
 
         close_btn = QPushButton(_('close'))
-        close_btn.setObjectName("standard")
+        apply_button_style(close_btn, 'glass')
         close_btn.clicked.connect(self.accept)
         btn_row.addWidget(close_btn)
 

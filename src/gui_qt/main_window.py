@@ -2,11 +2,11 @@ from typing import Optional, List, Dict, Any
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QComboBox,
     QLabel, QPushButton, QToolBar, QToolButton, QMenu, QStatusBar,
-    QSplitter, QApplication, QSizePolicy, QFrame, QMessageBox, QDialog,
-    QStackedLayout
+    QSplitter, QFrame, QAbstractItemView, QApplication, QGridLayout,
+    QSizePolicy, QMessageBox, QDialog, QStackedLayout
 )
 from PySide6.QtCore import Qt, QEvent, QTimer, QThread, Signal
-from PySide6.QtGui import QIcon, QPixmap, QPalette, QColor
+from PySide6.QtGui import QIcon, QPixmap, QPalette, QColor, QKeySequence, QShortcut
 import os
 import sys
 
@@ -14,8 +14,12 @@ from .material_tree_panel import MaterialTreePanel
 from .material_editor_panel import MaterialEditorPanel
 from .models import LibraryListModel, MaterialListModel
 from .loading_overlay import LoadingOverlay
+from .about_dialog_qt import AboutDialog
 from src.core.database import MaterialDatabase
 from src.core.i18n import _, language_manager
+from src.core.version import get_version, get_build_date
+from src.utils.resource_path import get_assets_path, ensure_data_dirs
+from .widgets.toast import toast
 
 
 class SearchWorker(QThread):
@@ -98,12 +102,15 @@ class MaterialDatabaseMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         
-        # 设置窗口标题和图标
-        # 设置窗口标题和图标
-        self.setWindowTitle(_('app_title_full'))
+        # 确保数据目录存在（打包后首次运行需要创建）
+        ensure_data_dirs()
         
-        # 尝试加载应用图标
-        icon_path = os.path.join(os.path.dirname(__file__), "assets", "app_icon.png")
+        # 设置窗口标题和图标（包含动态版本号）
+        version = get_version()
+        self.setWindowTitle(f"{_('app_title_full')} v{version}")
+        
+        # 尝试加载应用图标（使用资源路径辅助模块）
+        icon_path = get_assets_path("app_icon.png")
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
         
@@ -183,6 +190,18 @@ class MaterialDatabaseMainWindow(QMainWindow):
         self.command_bar.library_combo.currentIndexChanged.connect(self._on_library_changed)
         self.command_bar.search_btn.clicked.connect(self._on_search)
         self.command_bar.clear_btn.clicked.connect(self._on_clear_search)
+        # typing triggers debounce search
+        self.command_bar.search_edit.textChanged.connect(self._on_search)
+        # enter to search immediately
+        self.command_bar.search_edit.returnPressed.connect(self._do_search)
+        # esc clears input
+        self.command_bar.search_edit.installEventFilter(self)
+
+        # shortcuts: Ctrl+F focus search; Esc clear if focused
+        try:
+            QShortcut(QKeySequence.Find, self, activated=self._focus_search)
+        except Exception:
+            pass
 
         # tool bar
         toolbar = self._create_toolbar()
@@ -245,6 +264,59 @@ class MaterialDatabaseMainWindow(QMainWindow):
             return
         return super().customEvent(event)
 
+    # ==================== 帮助类 ====================
+    
+    class GlowButtonWrapper(QWidget):
+        """带有独立发光层的按钮包装器（解决文字模糊问题）"""
+        
+        def __init__(self, text, object_name, callback, color, parent=None, is_tool_button=True):
+            super().__init__(parent)
+            self.setObjectName(f"{object_name}_wrapper")
+            
+            # 使用层叠布局
+            layout = QGridLayout(self)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
+            
+            # 1. 底部发光层（用于应用 DropShadow）
+            self.glow_bg = QWidget()
+            self.glow_bg.setObjectName(object_name)  # 复用按钮样式
+            self.glow_bg.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)  # 不接收鼠标事件
+            layout.addWidget(self.glow_bg, 0, 0)
+            
+            # 2. 顶部按钮层（不应用发光，保持文字清晰）
+            from PySide6.QtWidgets import QToolButton, QPushButton
+            if is_tool_button:
+                self.btn = QToolButton()
+            else:
+                self.btn = QPushButton()
+            
+            self.btn.setText(text)
+            self.btn.setObjectName(object_name)
+            self.btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.btn.clicked.connect(callback)
+            layout.addWidget(self.btn, 0, 0)
+            
+            # 初始化发光效果（应用于底部层）
+            from src.gui_qt.theme.qss import apply_glow_effect
+            apply_glow_effect(self.glow_bg, color=color, blur_radius=15)
+            
+            # 事件穿透处理：当鼠标悬停在按钮上时，手动触发底部层的发光效果
+            self.btn.installEventFilter(self)
+        
+        def eventFilter(self, obj, event):
+            if obj == self.btn:
+                if event.type() == QEvent.Enter:
+                    # 鼠标进入按钮 -> 触发底部层的 Enter 事件以显示发光
+                    QApplication.sendEvent(self.glow_bg, QEvent(QEvent.Enter))
+                elif event.type() == QEvent.Leave:
+                    # 鼠标离开按钮 -> 触发底部层的 Leave 事件以隐藏发光
+                    QApplication.sendEvent(self.glow_bg, QEvent(QEvent.Leave))
+            return super().eventFilter(obj, event)
+
+    def _create_glow_tool_button(self, text, object_name, callback, color=(47, 129, 247)):
+        return self.GlowButtonWrapper(text, object_name, callback, color, is_tool_button=True)
+
     def _create_menubar(self):
         menubar = self.menuBar()
         
@@ -285,28 +357,33 @@ class MaterialDatabaseMainWindow(QMainWindow):
         toolbar.setMovable(False)
 
         # left group
-        self.import_btn = QToolButton()
-        self.import_btn.setObjectName("primary")
-        self.import_btn.clicked.connect(self._on_import_library)
-        toolbar.addWidget(self.import_btn)
+        import_wrapper = self._create_glow_tool_button("", "blue-glass", self._on_import_library, color=(47, 129, 247))
+        self.import_btn = import_wrapper.btn # Keep reference
+        toolbar.addWidget(import_wrapper)
 
         self.export_btn = QToolButton()
+        self.export_btn.setObjectName("glass")
         self.export_btn.clicked.connect(self._on_export_material)
         toolbar.addWidget(self.export_btn)
 
-        self.autopack_btn = QToolButton()
-        self.autopack_btn.clicked.connect(self._on_autopack)
-        toolbar.addWidget(self.autopack_btn)
+        autopack_wrapper = self._create_glow_tool_button("", "warning", self._on_autopack, color=(210, 153, 34))
+        self.autopack_btn = autopack_wrapper.btn # Keep reference
+        toolbar.addWidget(autopack_wrapper)
 
         toolbar.addSeparator()
 
         # center group
-        self.match_btn = QToolButton()
-        self.match_btn.setObjectName("primary")
-        self.match_btn.clicked.connect(self._on_match_material)
-        toolbar.addWidget(self.match_btn)
+        match_wrapper = self._create_glow_tool_button("", "blue-glass", self._on_match_material, color=(47, 129, 247))
+        self.match_btn = match_wrapper.btn # Keep reference
+        toolbar.addWidget(match_wrapper)
+
+        # 材质替换按钮（位于材质匹配按钮右侧）
+        replace_wrapper = self._create_glow_tool_button("", "purple-glass", self._on_replace_material, color=(137, 87, 229))
+        self.replace_btn = replace_wrapper.btn # Keep reference
+        toolbar.addWidget(replace_wrapper)
 
         self.adv_btn = QToolButton()
+        self.adv_btn.setObjectName("glass")
         self.adv_btn.clicked.connect(self._on_advanced_search)
         toolbar.addWidget(self.adv_btn)
 
@@ -315,38 +392,44 @@ class MaterialDatabaseMainWindow(QMainWindow):
         # right group
         self.refresh_btn = QToolButton()
         self.refresh_btn.setText("🔄")
-        self.refresh_btn.setObjectName("ghost")
+        self.refresh_btn.setObjectName("glass")
         self.refresh_btn.clicked.connect(self._on_refresh)
         toolbar.addWidget(self.refresh_btn)
 
         self.more_btn = QToolButton()
+        self.more_btn.setObjectName("glass")
         self.more_btn.setPopupMode(QToolButton.InstantPopup)
         self.more_menu = QMenu(self.more_btn)
         self.act_manage_libraries = self.more_menu.addAction(_('menu_library_manager_icon'), self._on_manage_libraries)
         self.more_btn.setMenu(self.more_menu)
         toolbar.addWidget(self.more_btn)
+        
+        # 应用悬停发光效果 - 已由 GlowButtonWrapper 处理
+        # (Removed apply_glow_effect calls)
 
         return toolbar
 
     def _apply_translations(self):
-        # window & command bar
-        self.setWindowTitle(_('app_title_full'))
+        # window & command bar (包含动态版本号)
+        version = get_version()
+        self.setWindowTitle(f"{_('app_title_full')} v{version}")
         self.command_bar.library_label.setText(_('menu_library_manager'))
         self.command_bar.search_edit.setPlaceholderText(_('search_placeholder_full'))
         self.command_bar.search_btn.setText(_('search_button'))
         self.command_bar.clear_btn.setText(_('clear_button'))
 
-        # toolbar buttons
-        self.import_btn.setText(_('menu_import'))
-        self.export_btn.setText(_('menu_export_material'))
-        self.autopack_btn.setText(_('menu_autopack'))
-        self.match_btn.setText(_('material_matching_button'))
-        self.adv_btn.setText(_('advanced_search_button'))
-        self.refresh_btn.setText(_('menu_refresh'))
-        self.more_btn.setText(f"⋯ { _('menu_tools') }")
-        self.act_manage_libraries.setText(_('menu_library_manager_icon'))
+        # toolbar buttons - 添加 emoji 图标前缀
+        self.import_btn.setText(f"📥 {_('menu_import')}")
+        self.export_btn.setText(f"📤 {_('menu_export_material')}")
+        self.autopack_btn.setText(f"📦 {_('menu_autopack')}")
+        self.match_btn.setText(f"🎯 {_('material_matching_button')}")
+        self.replace_btn.setText(f"🔄 {_('material_replace_button')}")
+        self.adv_btn.setText(f"🔍 {_('advanced_search_button')}")
+        self.refresh_btn.setText(f"🔄 {_('menu_refresh')}")
+        self.more_btn.setText(f"🔧 {_('menu_tools')}")
+        self.act_manage_libraries.setText(f"📚 {_('menu_library_manager')}")
 
-        # menubar titles & actions
+        # menubar titles & actions (菜单栏不添加 emoji)
         self.menu_file.setTitle(_('menu_file'))
         self.act_import.setText(_('menu_import'))
         self.act_export.setText(_('menu_export_material'))
@@ -457,6 +540,25 @@ class MaterialDatabaseMainWindow(QMainWindow):
         self._search_timer.stop()  # 停止任何待执行的搜索
         self.command_bar.search_edit.clear()
         self._load_materials(keyword="")
+        try:
+            toast(self, _("search_cleared"), duration_ms=1600)
+        except Exception:
+            pass
+
+    def _focus_search(self):
+        try:
+            self.command_bar.search_edit.setFocus(Qt.ShortcutFocusReason)
+            self.command_bar.search_edit.selectAll()
+        except Exception:
+            pass
+
+    def eventFilter(self, obj, event):  # type: ignore[override]
+        if obj is getattr(self.command_bar, 'search_edit', None):
+            if event.type() == QEvent.KeyPress and event.key() == Qt.Key_Escape:
+                if self.command_bar.search_edit.text():
+                    self._on_clear_search()
+                    return True
+        return super().eventFilter(obj, event)
 
     def _on_material_selected(self, material_data):
         if isinstance(material_data, dict):
@@ -847,6 +949,21 @@ class MaterialDatabaseMainWindow(QMainWindow):
 
             QMessageBox.warning(self, _('error'), _('match_window_error').format(exc=exc, traceback=traceback.format_exc()))
 
+    def _on_replace_material(self):
+        """打开材质替换编辑器"""
+        try:
+            from .material_replace_editor import MaterialReplaceEditor
+
+            # 创建材质替换编辑器窗口
+            editor = MaterialReplaceEditor(
+                parent=self,
+                database_manager=self.db
+            )
+            editor.show()
+        except Exception as exc:
+            import traceback
+            QMessageBox.warning(self, _('error'), _('match_window_error').format(exc=exc, traceback=traceback.format_exc()))
+
     def _on_advanced_search(self):
         """打开高级搜索对话框"""
         try:
@@ -882,6 +999,10 @@ class MaterialDatabaseMainWindow(QMainWindow):
     def _on_refresh(self):
         self._load_libraries()
         self._info(_('list_refreshed_msg'))
+        try:
+            toast(self, _('list_refreshed_msg'))
+        except Exception:
+            pass
 
     def _on_manage_libraries(self):
         """打开库管理对话框"""
@@ -925,13 +1046,25 @@ class MaterialDatabaseMainWindow(QMainWindow):
                 autopack_mgr = AutoPackManager()
                 autopack_mgr.add_material_by_db_id(mid, material_name)
                 self.statusBar().showMessage(_('save_and_autopack_success'), 3000)
+                try:
+                    toast(self, _('save_and_autopack_success'))
+                except Exception:
+                    pass
             else:
                 self.statusBar().showMessage(_('save_success'), 3000)
+                try:
+                    toast(self, _('save_success'))
+                except Exception:
+                    pass
             
             # 重新加载详情，确保显示与数据库一致
             self._load_material_detail(mid)
         except Exception as exc:
             self.statusBar().showMessage(_('save_failed_msg').format(exc=exc), 5000)
+            try:
+                toast(self, _('save_failed_msg').format(exc=exc), duration_ms=4200)
+            except Exception:
+                pass
     
     def _on_export_material_from_panel(self, export_data: Dict[str, Any]):
         """从右侧面板触发的导出 (exportRequested信号)"""
@@ -957,11 +1090,23 @@ class MaterialDatabaseMainWindow(QMainWindow):
             if export_data.get('add_to_autopack', False):
                 # TODO: 调用自动封包管理器添加
                 self._info("已导出并添加到自动封包队列")
+                try:
+                    toast(self, "已导出并添加到自动封包队列")
+                except Exception:
+                    pass
             else:
                 self._info(f"导出成功: {file_path}")
+                try:
+                    toast(self, f"导出成功: {file_path}")
+                except Exception:
+                    pass
                 
         except Exception as exc:
             QMessageBox.warning(self, "导出失败", f"导出过程中出错: {exc}")
+            try:
+                toast(self, f"导出失败: {exc}", duration_ms=4200)
+            except Exception:
+                pass
 
     # ---- 菜单栏功能方法 ----
     
@@ -999,25 +1144,8 @@ class MaterialDatabaseMainWindow(QMainWindow):
     
     def _show_about(self):
         """显示关于对话框"""
-        about_text = f"""
-        <h2>{_('about_app_name')}</h2>
-        <p><b>{_('about_version')}:</b> v1.1</p>
-        <p><b>{_('about_description')}:</b> {_('about_description_text')}</p>
-        <br>
-        <p><b>{_('about_features')}:</b></p>
-        <ul>
-            <li>{_('about_feature_import')}</li>
-            <li>{_('about_feature_match')}</li>
-            <li>{_('about_feature_search')}</li>
-            <li>{_('about_feature_edit')}</li>
-            <li>{_('about_feature_autopack')}</li>
-        </ul>
-        <br>
-        <p><b>{_('about_tech_stack')}:</b> Python 3 + PySide6 (Qt6)</p>
-        <p><b>{_('about_developer')}:</b> CCX</p>
-        <p><b>{_('about_date')}:</b> 2025-12-23</p>
-        """
-        QMessageBox.about(self, _('about_title'), about_text)
+        dialog = AboutDialog(self)
+        dialog.exec()
 
 
 # convenience runner for module testing

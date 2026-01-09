@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
 )
 from .smooth_scroll import SmoothTableWidget
+from src.utils.resource_path import get_assets_path
 
 
 
@@ -111,9 +112,8 @@ class _PriorityComboRow(QWidget):
         all_keys = [str(it.get("key")) for it in items]
         all_labels = [self._owner._priority_key_to_label(k) for k in all_keys]
         
-        # 加载 SVG 图标
-        import os
-        icon_path = os.path.join(os.path.dirname(__file__), "assets", "chevron_down.svg")
+        # 加载 SVG 图标（使用资源路径辅助模块）
+        icon_path = get_assets_path("chevron_down.svg")
         chevron_icon = QIcon(icon_path)
 
         for idx, it in enumerate(items):

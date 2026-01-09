@@ -11,6 +11,9 @@ import logging
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 
+# 导入资源路径辅助模块
+from src.utils.resource_path import get_database_path
+
 # 配置日志
 logger = logging.getLogger(__name__)
 # 临时设置为DEBUG级别进行调试
@@ -19,13 +22,16 @@ logging.basicConfig(level=logging.DEBUG, format='%(levelname)s:%(name)s:%(messag
 class MaterialDatabase:
     """材质数据库管理类"""
     
-    def __init__(self, db_path: str = "data/databases/materials.db"):
+    def __init__(self, db_path: str = None):
         """
         初始化数据库连接
         
         Args:
-            db_path: 数据库文件路径
+            db_path: 数据库文件路径，如果为 None 则使用默认路径
         """
+        # 使用资源路径辅助模块获取默认数据库路径
+        if db_path is None:
+            db_path = get_database_path()
         self.db_path = db_path
         
         # 确保数据库目录存在
@@ -116,6 +122,22 @@ class MaterialDatabase:
                 # 搜索优化索引
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_materials_shader ON materials(shader_path)')
                 
+                # 添加 display_order 列（如果不存在）- 用于控制库的显示顺序
+                try:
+                    cursor.execute('ALTER TABLE material_libraries ADD COLUMN display_order INTEGER DEFAULT 0')
+                    # 为已有库初始化 display_order（按创建时间排序）
+                    cursor.execute('''
+                        UPDATE material_libraries SET display_order = (
+                            SELECT COUNT(*) FROM material_libraries t2 
+                            WHERE t2.created_time < material_libraries.created_time OR 
+                                  (t2.created_time = material_libraries.created_time AND t2.id < material_libraries.id)
+                        ) + 1
+                    ''')
+                    logger.info("添加 display_order 列成功")
+                except sqlite3.OperationalError:
+                    # 列已存在，忽略
+                    pass
+                
                 conn.commit()
                 logger.info("数据库初始化完成")
                 
@@ -129,8 +151,8 @@ class MaterialDatabase:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    INSERT INTO material_libraries (name, description, source_path)
-                    VALUES (?, ?, ?)
+                    INSERT INTO material_libraries (name, description, source_path, display_order)
+                    VALUES (?, ?, ?, (SELECT COALESCE(MAX(display_order), 0) + 1 FROM material_libraries))
                 ''', (name, description, source_path))
                 
                 library_id = cursor.lastrowid
@@ -172,9 +194,10 @@ class MaterialDatabase:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
                 cursor.execute('''
-                    SELECT id, name, description, source_path, created_time, updated_time
+                    SELECT id, name, description, source_path, created_time, updated_time, 
+                           COALESCE(display_order, id) as display_order
                     FROM material_libraries
-                    ORDER BY created_time DESC
+                    ORDER BY display_order ASC
                 ''')
                 
                 return [dict(row) for row in cursor.fetchall()]
@@ -267,20 +290,114 @@ class MaterialDatabase:
             logger.error(f"删除材质库失败: {str(e)}")
             raise
     
-    def add_materials(self, library_id: int, materials_data: List[Dict[str, Any]]):
-        """批量添加材质到指定库"""
+    def swap_library_order(self, library_id_1: int, library_id_2: int):
+        """交换两个库的显示顺序"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
-                for material_data in materials_data:
+                # 获取两个库的当前顺序
+                cursor.execute(
+                    "SELECT id, display_order FROM material_libraries WHERE id IN (?, ?)",
+                    (library_id_1, library_id_2)
+                )
+                rows = cursor.fetchall()
+                
+                if len(rows) != 2:
+                    raise ValueError("找不到指定的库")
+                
+                order_map = {row[0]: row[1] for row in rows}
+                order1 = order_map.get(library_id_1)
+                order2 = order_map.get(library_id_2)
+                
+                # 交换顺序
+                cursor.execute(
+                    "UPDATE material_libraries SET display_order = ? WHERE id = ?",
+                    (order2, library_id_1)
+                )
+                cursor.execute(
+                    "UPDATE material_libraries SET display_order = ? WHERE id = ?",
+                    (order1, library_id_2)
+                )
+                
+                conn.commit()
+                logger.info(f"交换库顺序成功: {library_id_1} <-> {library_id_2}")
+                
+        except sqlite3.Error as e:
+            logger.error(f"交换库顺序失败: {str(e)}")
+            raise
+    
+    def reorder_libraries(self):
+        """重新整理所有库的 display_order，使其从1开始连续"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # 按当前 display_order 获取所有库
+                cursor.execute(
+                    "SELECT id FROM material_libraries ORDER BY COALESCE(display_order, id) ASC"
+                )
+                library_ids = [row[0] for row in cursor.fetchall()]
+                
+                # 重新分配 display_order
+                for new_order, lib_id in enumerate(library_ids, start=1):
+                    cursor.execute(
+                        "UPDATE material_libraries SET display_order = ? WHERE id = ?",
+                        (new_order, lib_id)
+                    )
+                
+                conn.commit()
+                logger.info(f"重新整理库顺序成功: 共 {len(library_ids)} 个库")
+                
+        except sqlite3.Error as e:
+            logger.error(f"重新整理库顺序失败: {str(e)}")
+            raise
+    
+    def add_materials(self, library_id: int, materials_data: List[Dict[str, Any]], 
+                      progress_callback=None, batch_size: int = 100):
+        """
+        批量添加材质到指定库（优化版本）
+        
+        使用批量插入和事务优化，大幅提升导入速度
+        
+        Args:
+            library_id: 目标材质库ID
+            materials_data: 材质数据列表
+            progress_callback: 进度回调函数 callback(current, total, message)
+            batch_size: 批量提交大小，默认100
+        """
+        try:
+            total = len(materials_data)
+            logger.info(f"开始批量添加 {total} 个材质到库 {library_id}...")
+            
+            with sqlite3.connect(self.db_path) as conn:
+                # 优化 SQLite 性能
+                conn.execute("PRAGMA synchronous = OFF")
+                conn.execute("PRAGMA journal_mode = MEMORY")
+                conn.execute("PRAGMA cache_size = 10000")
+                cursor = conn.cursor()
+                
+                # 预编译 SQL 语句
+                material_sql = '''
+                    INSERT INTO materials (
+                        library_id, file_path, file_name, filename, 
+                        shader_path, source_path, compression, key_value
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                '''
+                param_sql = '''
+                    INSERT INTO material_params (material_id, name, type, value, key_value, sort_order)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                '''
+                sampler_sql = '''
+                    INSERT INTO material_samplers (
+                        material_id, type, path, key_value, unk14_x, unk14_y, sort_order
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                '''
+                
+                processed = 0
+                for i, material_data in enumerate(materials_data):
                     # 插入材质基本信息
-                    cursor.execute('''
-                        INSERT INTO materials (
-                            library_id, file_path, file_name, filename, 
-                            shader_path, source_path, compression, key_value
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (
+                    cursor.execute(material_sql, (
                         library_id,
                         material_data.get('file_path', ''),
                         material_data.get('file_name', ''),
@@ -293,12 +410,10 @@ class MaterialDatabase:
                     
                     material_id = cursor.lastrowid
                     
-                    # 插入参数
+                    # 批量准备参数数据
+                    params_data = []
                     for param_index, param in enumerate(material_data.get('params', [])):
-                        cursor.execute('''
-                            INSERT INTO material_params (material_id, name, type, value, key_value, sort_order)
-                            VALUES (?, ?, ?, ?, ?, ?)
-                        ''', (
+                        params_data.append((
                             material_id,
                             param.get('name', ''),
                             param.get('type', ''),
@@ -307,14 +422,15 @@ class MaterialDatabase:
                             param_index
                         ))
                     
-                    # 插入样例
+                    # 批量插入参数
+                    if params_data:
+                        cursor.executemany(param_sql, params_data)
+                    
+                    # 批量准备采样器数据
+                    samplers_data = []
                     for sampler_index, sampler in enumerate(material_data.get('samplers', [])):
                         unk14 = sampler.get('unk14', {})
-                        cursor.execute('''
-                            INSERT INTO material_samplers (
-                                material_id, type, path, key_value, unk14_x, unk14_y, sort_order
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                        ''', (
+                        samplers_data.append((
                             material_id,
                             sampler.get('type', ''),
                             sampler.get('path', ''),
@@ -323,9 +439,31 @@ class MaterialDatabase:
                             unk14.get('Y', 0),
                             sampler_index
                         ))
+                    
+                    # 批量插入采样器
+                    if samplers_data:
+                        cursor.executemany(sampler_sql, samplers_data)
+                    
+                    processed += 1
+                    
+                    # 每 batch_size 个材质提交一次，并报告进度
+                    if processed % batch_size == 0:
+                        conn.commit()
+                        if progress_callback:
+                            progress_callback(processed, total, f"已导入 {processed}/{total} 个材质")
+                        logger.debug(f"批量提交: {processed}/{total}")
                 
+                # 最终提交
                 conn.commit()
-                logger.info(f"成功添加 {len(materials_data)} 个材质到库 {library_id}")
+                
+                if progress_callback:
+                    progress_callback(total, total, f"完成导入 {total} 个材质")
+                
+                logger.info(f"成功添加 {total} 个材质到库 {library_id}")
+                
+        except sqlite3.Error as e:
+            logger.error(f"添加材质失败: {str(e)}")
+            raise
                 
         except sqlite3.Error as e:
             logger.error(f"添加材质失败: {str(e)}")
@@ -333,7 +471,7 @@ class MaterialDatabase:
     
     def search_materials(self, library_id: int = None, keyword: str = "", 
                         material_type: str = "", material_path: str = "") -> List[Dict[str, Any]]:
-        """搜索材质"""
+        """搜索材质（支持文件名、路径模糊搜索，自动提取路径中的文件名）"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
@@ -356,10 +494,26 @@ class MaterialDatabase:
                     conditions.append("m.library_id = ?")
                     params.append(library_id)
                 
-                # 添加关键字条件
+                # 添加关键字条件（增强：支持文件名、shader_path、source_path）
                 if keyword:
-                    conditions.append("(m.filename LIKE ? OR m.file_name LIKE ?)")
-                    params.extend([f"%{keyword}%", f"%{keyword}%"])
+                    # 自动提取文件名部分（支持完整路径输入）
+                    import os
+                    search_keyword = keyword
+                    # 如果输入包含路径分隔符，提取文件名部分
+                    if '\\' in keyword or '/' in keyword:
+                        filename_part = os.path.basename(keyword.replace('\\', '/'))
+                        if filename_part:
+                            search_keyword = filename_part
+                    
+                    # 多字段模糊搜索
+                    conditions.append("""(
+                        m.filename LIKE ? OR 
+                        m.file_name LIKE ? OR 
+                        m.shader_path LIKE ? OR 
+                        m.source_path LIKE ?
+                    )""")
+                    like_pattern = f"%{search_keyword}%"
+                    params.extend([like_pattern, like_pattern, like_pattern, like_pattern])
                 
                 # 添加材质类型和路径条件（需要关联samplers表）
                 if material_type or material_path:
@@ -1747,6 +1901,120 @@ class MaterialDatabase:
         except Exception as e:
             logger.error(f"获取参数时发生错误: {e}")
             return []
+    
+    def search_material_by_path(self, path_pattern: str, library_id: int = None) -> List[Dict[str, Any]]:
+        """
+        按材质路径模糊搜索（支持MTD路径和纹理路径）
+        
+        按设计文档8.1实现：
+        - 支持搜索材质MTD路径
+        - 支持搜索采样器纹理路径
+        - 路径归一化处理
+        
+        Args:
+            path_pattern: 路径模式（支持文件名或完整路径）
+            library_id: 材质库ID，None表示搜索所有库
+            
+        Returns:
+            匹配的材质列表
+        """
+        try:
+            # 路径标准化并提取文件名
+            normalized = path_pattern.replace('\\\\', '\\').replace('/', '\\')
+            filename = normalized.split('\\')[-1]
+            
+            # 去掉.matxml后缀（如果有）
+            if filename.lower().endswith('.matxml'):
+                filename = filename[:-7]
+            
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # 构建查询：同时搜索材质MTD路径和采样器纹理路径
+                if library_id:
+                    query = '''
+                        SELECT DISTINCT m.*, ml.name as library_name 
+                        FROM materials m 
+                        LEFT JOIN material_libraries ml ON m.library_id = ml.id 
+                        LEFT JOIN material_samplers s ON m.id = s.material_id
+                        WHERE (m.shader_path LIKE ? OR m.filename LIKE ? OR s.path LIKE ?)
+                          AND m.library_id = ?
+                        ORDER BY m.filename
+                    '''
+                    search_param = f'%{filename}%'
+                    cursor.execute(query, (search_param, search_param, search_param, library_id))
+                else:
+                    query = '''
+                        SELECT DISTINCT m.*, ml.name as library_name 
+                        FROM materials m 
+                        LEFT JOIN material_libraries ml ON m.library_id = ml.id 
+                        LEFT JOIN material_samplers s ON m.id = s.material_id
+                        WHERE (m.shader_path LIKE ? OR m.filename LIKE ? OR s.path LIKE ?)
+                        ORDER BY m.filename
+                    '''
+                    search_param = f'%{filename}%'
+                    cursor.execute(query, (search_param, search_param, search_param))
+                
+                columns = [description[0] for description in cursor.description]
+                results = []
+                for row in cursor.fetchall():
+                    material = dict(zip(columns, row))
+                    results.append(material)
+                
+                return results
+                
+        except sqlite3.Error as e:
+            logger.error(f"按路径搜索材质时发生数据库错误: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"按路径搜索材质时发生错误: {e}")
+            return []
+    
+    def auto_match_material(self, mtd_path: str) -> Dict[str, Any]:
+        """
+        自动匹配材质，返回匹配结果和所在库
+        
+        按设计文档8.2实现：
+        - 自动查找匹配的材质
+        - 返回是否需要用户确认
+        
+        Args:
+            mtd_path: 材质MTD路径
+            
+        Returns:
+            匹配结果字典，包含：
+            - matched: 是否找到匹配
+            - material: 匹配的材质（如果有）
+            - library_id: 所属库ID
+            - needs_confirm: 是否需要用户确认（多个结果时）
+            - alternatives: 其他候选材质（如果有多个匹配）
+        """
+        results = self.search_material_by_path(mtd_path)
+        
+        if len(results) == 1:
+            return {
+                'matched': True,
+                'material': results[0],
+                'library_id': results[0].get('library_id'),
+                'needs_confirm': False,
+                'alternatives': []
+            }
+        elif len(results) > 1:
+            return {
+                'matched': True,
+                'material': results[0],
+                'library_id': results[0].get('library_id'),
+                'needs_confirm': True,
+                'alternatives': results[1:]
+            }
+        else:
+            return {
+                'matched': False,
+                'material': None,
+                'library_id': None,
+                'needs_confirm': True,
+                'alternatives': []
+            }
     
     def close(self):
         """关闭数据库连接"""

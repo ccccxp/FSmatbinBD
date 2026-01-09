@@ -11,6 +11,7 @@ from PySide6.QtGui import QCursor, QIcon
 import json
 
 from src.core.i18n import _
+from src.utils.resource_path import get_assets_path
 from .sampler_panel import SamplerPanel
 from .models import SamplerTableModel
 from .smooth_scroll import SmoothScrollArea
@@ -126,8 +127,33 @@ class MaterialEditorPanel(QWidget):
         scroll = SmoothScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
+        # 添加透明背景和滚动条样式
+        scroll.setStyleSheet("""
+            SmoothScrollArea {
+                background: transparent;
+                border: none;
+            }
+            QScrollBar:vertical {
+                background: rgba(11, 16, 32, 200);
+                width: 10px;
+                border-radius: 5px;
+                margin: 0;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(43, 50, 80, 200);
+                border-radius: 5px;
+                min-height: 30px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: rgba(47, 129, 247, 200);
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0;
+            }
+        """)
         
         content_widget = QWidget()
+        content_widget.setStyleSheet("background: transparent;")
         content_layout = QVBoxLayout(content_widget)
         # 更贴顶：减小顶部边距，让“基本参数”更靠近标题条
         content_layout.setContentsMargins(12, 6, 12, 12)
@@ -452,11 +478,7 @@ class MaterialEditorPanel(QWidget):
         self.save_btn.clicked.connect(self._on_save_clicked)
         title_row.addWidget(self.save_btn)
 
-        self.export_btn = QPushButton(_('menu_export_material'))
-        self.export_btn.setObjectName("standard")
-        self.export_btn.setFixedHeight(26)
-        self.export_btn.clicked.connect(self._on_export_clicked)
-        title_row.addWidget(self.export_btn)
+
 
         header_layout.addLayout(title_row)
 
@@ -595,7 +617,7 @@ class MaterialEditorPanel(QWidget):
         # 与右侧“全部”下拉框统一高度
         self.display_btn.setFixedHeight(24)
         # 使用 SVG 图标，避免字体/Unicode 在不同环境下显示为方块
-        self.display_btn.setIcon(QIcon("src/gui_qt/assets/chevron_right.svg"))
+        self.display_btn.setIcon(QIcon(get_assets_path("chevron_right.svg")))
         self.display_btn.setIconSize(QSize(14, 14))
         self.display_btn.setPopupMode(QToolButton.InstantPopup)
         btn_qss = self._control_qss()
@@ -688,11 +710,36 @@ class MaterialEditorPanel(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setMinimumHeight(200)  # 确保参数区域有足够显示空间
+        # 添加透明背景和滚动条样式
+        scroll.setStyleSheet("""
+            SmoothScrollArea {
+                background: transparent;
+                border: none;
+            }
+            QScrollBar:vertical {
+                background: rgba(11, 16, 32, 200);
+                width: 10px;
+                border-radius: 5px;
+                margin: 0;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(43, 50, 80, 200);
+                border-radius: 5px;
+                min-height: 30px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: rgba(47, 129, 247, 200);
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0;
+            }
+        """)
 
         # 保存引用：用于 resize 时取 viewport 宽度计算列数
         self.params_scroll = scroll
         
         self.params_grid_widget = QWidget()
+        self.params_grid_widget.setStyleSheet("background: transparent;")
         self.params_grid = QGridLayout(self.params_grid_widget)
         # 卡片之间留出更明显的间距，避免边框在视觉上“连成一片”
         self.params_grid.setSpacing(16)
@@ -730,7 +777,7 @@ class MaterialEditorPanel(QWidget):
                 continue
             content.setVisible(not collapsed)
             btn.setChecked(not collapsed)
-            btn.setIcon(QIcon("src/gui_qt/assets/chevron_down.svg" if not collapsed else "src/gui_qt/assets/chevron_right.svg"))
+            btn.setIcon(QIcon(get_assets_path("chevron_down.svg") if not collapsed else get_assets_path("chevron_right.svg")))
 
     def _rebuild_params_view(self):
         # 使用当前缓存的参数重新渲染（支持搜索/分组/显示栏目切换）
@@ -1396,7 +1443,7 @@ class MaterialEditorPanel(QWidget):
             }
         """)
 
-        toggle.setIcon(QIcon("src/gui_qt/assets/chevron_down.svg"))
+        toggle.setIcon(QIcon(get_assets_path("chevron_down.svg")))
 
         title = QLabel(f"{group_name}  ({len(params)})")
         title.setStyleSheet("font-size: 12px; font-weight: 600; color: #f5f7ff;")
@@ -1430,7 +1477,7 @@ class MaterialEditorPanel(QWidget):
             collapsed = content.isVisible()
             content.setVisible(not collapsed)
             toggle.setChecked(not collapsed)
-            toggle.setIcon(QIcon("src/gui_qt/assets/chevron_down.svg" if not collapsed else "src/gui_qt/assets/chevron_right.svg"))
+            toggle.setIcon(QIcon(get_assets_path("chevron_down.svg") if not collapsed else get_assets_path("chevron_right.svg")))
 
         toggle.clicked.connect(_toggle)
 
@@ -1532,45 +1579,7 @@ class MaterialEditorPanel(QWidget):
         except Exception as exc:
             QMessageBox.warning(self, "保存失败", f"收集参数时出错: {exc}")
 
-    def _on_export_clicked(self):
-        if not self._current_detail:
-            QMessageBox.information(self, "导出材质", "请先选择材质")
-            return
-        
-        try:
-            from PySide6.QtWidgets import QFileDialog
-            
-            # 询问保存位置
-            file_path, _unused = QFileDialog.getSaveFileName(
-                self, 
-                "导出材质为XML", 
-                f"{self._current_detail.get('filename', 'material')}.xml",
-                "XML Files (*.xml)"
-            )
-            if not file_path:
-                return
-            
-            # 导出逻辑
-            from src.core.xml_parser import MaterialXMLParser
-            parser = MaterialXMLParser()
-            
-            export_data = dict(self._current_detail)
-            export_data['add_to_autopack'] = self.autopack_check.isChecked()
-            
-            parser.export_material_to_xml(export_data, file_path)
-            
-            # 如果勾选了自动封包
-            if export_data.get('add_to_autopack', False):
-                from src.core.autopack_manager import AutoPackManager
-                autopack_mgr = AutoPackManager()
-                autopack_mgr.add_to_autopack(file_path)
-                QMessageBox.information(self, "导出成功", f"已导出并添加到自动封包:\n{file_path}")
-            else:
-                QMessageBox.information(self, "导出成功", f"已导出至:\n{file_path}")
-                
-        except Exception as exc:
-            import traceback
-            QMessageBox.warning(self, "导出失败", f"导出过程中出错:\n{exc}\n\n{traceback.format_exc()}")
+
 
     def refresh_translations(self):
         """刷新所有翻译文本（语言切换时调用）"""
@@ -1578,7 +1587,7 @@ class MaterialEditorPanel(QWidget):
         self.title_label.setText(_('material_details'))  # 材质详情
         self.autopack_check.setText(_('add_to_autopack'))
         self.save_btn.setText(_('save'))
-        self.export_btn.setText(_('menu_export_material'))
+
         
         # 区域卡片标题
         if hasattr(self, 'basic_info_title') and self.basic_info_title:
