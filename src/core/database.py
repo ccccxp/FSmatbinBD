@@ -46,6 +46,13 @@ class MaterialDatabase:
     def _init_database(self):
         """初始化数据库表结构"""
         try:
+            # 调试：打印数据库路径信息
+            import sys
+            print(f"[DEBUG] 数据库路径: {self.db_path}")
+            print(f"[DEBUG] 文件存在: {os.path.exists(self.db_path)}")
+            if os.path.exists(self.db_path):
+                print(f"[DEBUG] 文件大小: {os.path.getsize(self.db_path)} bytes")
+            
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 

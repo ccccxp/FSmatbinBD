@@ -150,6 +150,8 @@ def get_database_path(db_name: str = "materials.db") -> str:
     """
     获取数据库文件路径
     
+    打包后数据库位于 internal/data/databases/ 目录
+    
     Args:
         db_name: 数据库文件名
         

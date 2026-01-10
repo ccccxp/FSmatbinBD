@@ -45,7 +45,7 @@ tools_dir = os.path.join(PROJECT_ROOT, 'tools')
 if os.path.exists(tools_dir):
     datas.append((tools_dir, 'tools'))
 
-# 数据目录
+# 数据目录（包含预置的数据库文件）
 data_dir = os.path.join(PROJECT_ROOT, 'data')
 if os.path.exists(data_dir):
     datas.append((data_dir, 'data'))
