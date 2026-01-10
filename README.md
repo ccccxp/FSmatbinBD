@@ -1,48 +1,87 @@
-# FSMatbinBD - FromSoftware Material Database Browser
+<div align="center">
+  <img src="src/gui_qt/assets/app_icon.png" alt="FSMatbinBD Logo" width="128" height="128">
 
-[![Build and Release](https://github.com/ccccxp/FSmatbinBD/actions/workflows/release.yml/badge.svg)](https://github.com/ccccxp/FSmatbinBD/actions/workflows/release.yml)
+  # FSMatbinBD
+  
+  **Material Database Manager for FromSoftware Games**
+  
+  [![Build Status](https://img.shields.io/github/actions/workflow/status/ccccxp/FSmatbinBD/release.yml?branch=main&style=flat-square)](https://github.com/ccccxp/FSmatbinBD/actions)
+  [![Release](https://img.shields.io/github/v/release/ccccxp/FSmatbinBD?style=flat-square)](https://github.com/ccccxp/FSmatbinBD/releases)
+  [![License](https://img.shields.io/github/license/ccccxp/FSmatbinBD?style=flat-square)](LICENSE)
+  [![Platform](https://img.shields.io/badge/platform-Windows-blue?style=flat-square)](https://github.com/ccccxp/FSmatbinBD/releases)
 
-[中文版](README_CN.md)
+  [**English**](README.md) | [**简体中文**](README_CN.md)
 
-A desktop tool for browsing, searching, and managing material data from FromSoftware games (Elden Ring, Sekiro, etc.).
+</div>
 
-## ✨ Features
+<br/>
 
-- **Material Library Management**: Import DCX files, auto-parse and build local database
-- **Fast Search**: Keyword search, advanced filters (shader path, sampler type, etc.)
-- **Material Matching**: Smart matching of similar materials for replacement assistance
-- **Batch Operations**: Bulk texture path replacement and more
-- **High Performance**: 8-thread concurrent import for lightning-fast processing
+FSMatbinBD is a utility designed to parse and create a searchable index of material definition files (MTD/MATBIN) used in FromSoftware games, including **Elden Ring**, **Dark Souls 3**, **Sekiro**, and **Nightreign**.
 
-## 🚀 Quick Start
+It unpacks material archives into a local SQLite database, allowing users to query material properties, find compatible assets for model porting, and batch-edit texture paths without manually editing XML files.
 
-### Download Release
-Download the latest `.zip` from [Releases](https://github.com/ccccxp/FSmatbinBD/releases), extract and run `FSMatbinBD.exe`.
+## Features
 
-### Run from Source
+- **Material Library Import**
+  - Parses `.mtdbnd.dcx` and `.matbinbnd.dcx` files.
+  - Indexes metadata including shader paths, parameter values, and texture slots.
+  - Supports switching between multiple game databases.
+
+- **Search & Filtering**
+  - Keyword search by material name, filename, or shader source.
+  - Structured filtering by internal properties (e.g., shader type, sampler count, alpha blend mode).
+
+- **Material Similarity Matching**
+  - Calculates similarity scores between materials based on texture slots, parameters, and naming patterns.
+  - Assists in identifying compatible materials when porting meshes between games (e.g., DS3 to ER).
+
+- **Editing & Batch Processing**
+  - View and edit material parameters.
+  - Batch replace texture paths using string replacement or regex patterns.
+  - Integrated repacking via [WitchyBND](https://github.com/ividyon/WitchyBND) to generate valid DCX files.
+
+## Installation
+
+### Option 1: Full Package
+Includes a pre-built database for recent games.
+
+1. Download `FSMatbinBD_vX.X.X_Windows_x64_Full.zip` from [Releases](https://github.com/ccccxp/FSmatbinBD/releases).
+2. Extract and run `FSMatbinBD.exe`.
+
+### Option 2: Lite Package
+Contains only the executable. Users can import their own game files.
+
+1. Download `FSMatbinBD_vX.X.X_Windows_x64_Lite.zip`.
+2. Extract and run `FSMatbinBD.exe`.
+3. **Database Setup**:
+   - **Import**: Click `Library Manager` → `Import DCX` and select a material archive (e.g., `allmaterialbnd.mtdbnd.dcx`) from your game dump.
+   - **Or**: Download a separate `materials.db` and place it in `internal/data/databases/`.
+
+## Workflow: Model Porting
+
+Example workflow for porting a mesh from Dark Souls 3 to Elden Ring:
+
+1. **Reference**: Export material information from the source model (e.g., via FLVER Editor).
+2. **Match**: Use the **Match Similar** function in FSMatbinBD to find a material in the target game library that shares similar shader requirements or texture inputs.
+3. **Edit**: Use **Batch Replace** to update texture paths to match the target game's directory structure.
+4. **Export**: The tool repacks the changes into a `.matbin` file for use in the target game.
+
+## Build from Source
+
+Requires Python 3.11+.
+
 ```bash
+git clone https://github.com/ccccxp/FSmatbinBD.git
+cd FSmatbinBD
 pip install -r requirements.txt
 python qt_main.py
 ```
 
-## 📦 Build
-```bash
-python build_app.py
-```
-Output in `dist/FSMatbinBD/`.
+## Acknowledgments
 
-## 📁 Structure
-```
-├── src/                  # Source code
-│   ├── core/             # Business logic
-│   └── gui_qt/           # PySide6 GUI
-├── tools/                # External tools (WitchyBND)
-├── data/databases/       # Local material database
-└── .github/workflows/    # CI/CD
-```
+- **[WitchyBND](https://github.com/ividyon/WitchyBND)**: Used for unpacking and repacking FromSoftware asset containers.
+- **SoulsMods Community**: For documentation on file formats.
 
-## 🔧 Tech Stack
-- Python 3.11+ | PySide6 (Qt6) | SQLite | PyInstaller
+## License
 
-## 📄 License
-MIT License
+MIT License. See [LICENSE](LICENSE) for details.
