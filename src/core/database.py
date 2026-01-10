@@ -34,11 +34,8 @@ class MaterialDatabase:
             db_path = get_database_path()
         self.db_path = db_path
         
-        # 确保数据库目录存在
-        if db_path != ":memory:":  # 内存数据库不需要创建目录
-            db_dir = os.path.dirname(db_path)
-            if db_dir:  # 如果有目录部分
-                os.makedirs(db_dir, exist_ok=True)
+        # 注意：不再自动创建目录，数据库文件应该已存在（打包时包含）
+        # 或者由用户手动创建
         
         # 初始化数据库
         self._init_database()
@@ -48,10 +45,20 @@ class MaterialDatabase:
         try:
             # 调试：打印数据库路径信息
             import sys
-            print(f"[DEBUG] 数据库路径: {self.db_path}")
-            print(f"[DEBUG] 文件存在: {os.path.exists(self.db_path)}")
+            logger.info(f"数据库路径: {self.db_path}")
+            logger.info(f"文件存在: {os.path.exists(self.db_path)}")
             if os.path.exists(self.db_path):
-                print(f"[DEBUG] 文件大小: {os.path.getsize(self.db_path)} bytes")
+                file_size = os.path.getsize(self.db_path)
+                logger.info(f"文件大小: {file_size} bytes")
+                # 检查文件大小是否合理
+                if file_size < 1000:
+                    logger.warning(f"警告: 数据库文件非常小 ({file_size} bytes)，可能不是有效的数据库")
+            else:
+                # 数据库不存在，需要创建目录和新数据库
+                db_dir = os.path.dirname(self.db_path)
+                if db_dir and not os.path.exists(db_dir):
+                    os.makedirs(db_dir, exist_ok=True)
+                    logger.info(f"创建数据库目录: {db_dir}")
             
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()

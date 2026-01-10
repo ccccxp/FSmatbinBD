@@ -34,7 +34,8 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # 获取完整历史
+        fetch-depth: 0
+        lfs: true  # 确保下载 Git LFS 管理的大文件（如数据库）
       
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -109,7 +110,7 @@ jobs:
           exit 1
         }
         
-    - name: Prepare release package
+    - name: Prepare release packages
       shell: pwsh
       run: |
         $version = "${{ steps.version.outputs.VERSION }}"
@@ -118,32 +119,77 @@ jobs:
         Copy-Item README.md dist/${{ env.APP_NAME }}/ -ErrorAction SilentlyContinue
         Copy-Item README_CN.md dist/${{ env.APP_NAME }}/ -ErrorAction SilentlyContinue
         
-        # 确保数据目录结构存在
-        New-Item -ItemType Directory -Force -Path dist/${{ env.APP_NAME }}/data/databases | Out-Null
+        # 确保辅助目录存在（这些是用户运行时需要的目录）
         New-Item -ItemType Directory -Force -Path dist/${{ env.APP_NAME }}/temp | Out-Null
         New-Item -ItemType Directory -Force -Path dist/${{ env.APP_NAME }}/output | Out-Null
         New-Item -ItemType Directory -Force -Path dist/${{ env.APP_NAME }}/logs | Out-Null
         
-        # 创建 .gitkeep 文件
-        New-Item -ItemType File -Force -Path dist/${{ env.APP_NAME }}/data/databases/.gitkeep | Out-Null
+        # 检查数据库是否存在于 internal/data/databases/
+        $dbPath = "dist/${{ env.APP_NAME }}/internal/data/databases/materials.db"
+        if (Test-Path $dbPath) {
+          $dbSize = (Get-Item $dbPath).Length / 1MB
+          Write-Host "✓ 数据库文件存在: $([math]::Round($dbSize, 2)) MB"
+          
+          # 复制数据库文件到根目录作为单独发布
+          Copy-Item $dbPath "materials.db"
+          Write-Host "✓ 提取数据库文件: materials.db"
+        } else {
+          Write-Host "⚠ 数据库文件不存在: $dbPath"
+          # 确保 data/databases 目录存在（用于精简版）
+          New-Item -ItemType Directory -Force -Path "dist/${{ env.APP_NAME }}/internal/data/databases" | Out-Null
+        }
         
-    - name: Create ZIP archive
+    - name: Create Full ZIP (with database)
       shell: pwsh
       run: |
         $version = "${{ steps.version.outputs.VERSION }}"
-        $zipName = "${{ env.APP_NAME }}_v${version}_Windows_x64.zip"
+        $zipName = "${{ env.APP_NAME }}_v${version}_Windows_x64_Full.zip"
         Compress-Archive -Path dist/${{ env.APP_NAME }}/* -DestinationPath $zipName -Force
         
-        # 显示包信息
         $zipSize = (Get-Item $zipName).Length / 1MB
-        Write-Host "✓ Package: $zipName"
-        Write-Host "✓ Size: $([math]::Round($zipSize, 2)) MB"
+        Write-Host "✓ 完整版包: $zipName ($([math]::Round($zipSize, 2)) MB)"
         
-    - name: Upload artifact
+    - name: Create Lite ZIP (without database)
+      shell: pwsh
+      run: |
+        $version = "${{ steps.version.outputs.VERSION }}"
+        $zipName = "${{ env.APP_NAME }}_v${version}_Windows_x64_Lite.zip"
+        
+        # 删除数据库文件
+        $dbPath = "dist/${{ env.APP_NAME }}/internal/data/databases/materials.db"
+        if (Test-Path $dbPath) {
+          Remove-Item $dbPath -Force
+          Write-Host "✓ 已移除数据库文件"
+        }
+        
+        # 创建空的 .gitkeep 保持目录结构
+        New-Item -ItemType File -Force -Path "dist/${{ env.APP_NAME }}/internal/data/databases/.gitkeep" | Out-Null
+        
+        Compress-Archive -Path dist/${{ env.APP_NAME }}/* -DestinationPath $zipName -Force
+        
+        $zipSize = (Get-Item $zipName).Length / 1MB
+        Write-Host "✓ 精简版包: $zipName ($([math]::Round($zipSize, 2)) MB)"
+        
+    - name: Upload Full artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ env.APP_NAME }}_v${{ steps.version.outputs.VERSION }}_Windows_x64
-        path: ${{ env.APP_NAME }}_v${{ steps.version.outputs.VERSION }}_Windows_x64.zip
+        name: ${{ env.APP_NAME }}_v${{ steps.version.outputs.VERSION }}_Windows_x64_Full
+        path: ${{ env.APP_NAME }}_v${{ steps.version.outputs.VERSION }}_Windows_x64_Full.zip
+        retention-days: 30
+        
+    - name: Upload Lite artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.APP_NAME }}_v${{ steps.version.outputs.VERSION }}_Windows_x64_Lite
+        path: ${{ env.APP_NAME }}_v${{ steps.version.outputs.VERSION }}_Windows_x64_Lite.zip
+        retention-days: 30
+        
+    - name: Upload Database artifact
+      uses: actions/upload-artifact@v4
+      if: ${{ hashFiles('materials.db') != '' }}
+      with:
+        name: materials_database
+        path: materials.db
         retention-days: 30
 
   release:
@@ -173,16 +219,15 @@ jobs:
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Version: $VERSION"
         
-    - name: Download artifact
+    - name: Download all artifacts
       uses: actions/download-artifact@v4
       with:
-        pattern: ${{ env.APP_NAME }}_*
         merge-multiple: true
         
     - name: List release files
       run: |
         echo "Release files:"
-        ls -la *.zip || echo "No zip files found"
+        ls -la *.zip *.db 2>/dev/null || echo "No release files found"
         
     - name: Create Release
       uses: softprops/action-gh-release@v1
@@ -192,36 +237,41 @@ jobs:
         body: |
           ## FSMatbinBD v${{ steps.version.outputs.VERSION }}
           
-          ### 📦 下载
+          ### 📦 下载选项
           
-          | 平台 | 文件 | 说明 |
+          | 文件 | 说明 | 大小 |
           |------|------|------|
-          | Windows x64 | `FSMatbinBD_v${{ steps.version.outputs.VERSION }}_Windows_x64.zip` | 64位 Windows 系统 |
+          | `FSMatbinBD_vX.X.X_Windows_x64_Full.zip` | **完整版** - 包含预置游戏材质数据库 | ~200MB |
+          | `FSMatbinBD_vX.X.X_Windows_x64_Lite.zip` | **精简版** - 不含数据库，需自行导入 | ~50MB |
+          | `materials.db` | **游戏材质数据库** - 单独下载 | ~190MB |
           
           ### 🚀 安装说明
           
-          1. 下载上方对应平台的压缩包
-          2. 解压到任意目录
-          3. 运行 `FSMatbinBD.exe`
+          **完整版**：
+          1. 下载 `Full.zip`，解压到任意目录
+          2. 运行 `FSMatbinBD.exe`
+          
+          **精简版（推荐老用户）**：
+          1. 下载 `Lite.zip`，解压到任意目录
+          2. 下载 `materials.db`
+          3. 将数据库文件放入 `internal/data/databases/` 目录
+          4. 运行 `FSMatbinBD.exe`
           
           ### ⚠️ 注意事项
           
-          - 首次运行会自动创建数据目录 (`data/databases/`)
           - 如需使用 DCX 导入功能，请确保 `tools/WitchyBND/` 目录完整
-          - 支持中文和英文界面，可在设置中切换
+          - 支持中文和英文界面
           
           ### 📝 系统要求
           
           - Windows 10/11 (64位)
           - 无需安装 Python 或其他依赖
           
-          ### 🔄 更新内容
-          
-          请查看 [更新日志](CHANGELOG.md) 获取详细信息。
-          
         files: |
           *.zip
+          *.db
         draft: false
         prerelease: ${{ contains(steps.version.outputs.VERSION, 'beta') || contains(steps.version.outputs.VERSION, 'alpha') || contains(steps.version.outputs.VERSION, 'rc') }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
