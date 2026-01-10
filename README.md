@@ -20,6 +20,8 @@ FSMatbinBD is a utility designed to parse and create a searchable index of mater
 
 It unpacks material archives into a local SQLite database, allowing users to query material properties, find compatible assets for model porting, and batch-edit texture paths without manually editing XML files.
 
+![Main Interface](images/main.png)
+
 ## Features
 
 - **Material Library Import**
@@ -61,10 +63,12 @@ Contains only the executable. Users can import their own game files.
 
 Example workflow for porting a mesh from Dark Souls 3 to Elden Ring:
 
-1. **Reference**: Export material information from the source model (e.g., via FLVER Editor).
-2. **Match**: Use the **Match Similar** function in FSMatbinBD to find a material in the target game library that shares similar shader requirements or texture inputs.
-3. **Edit**: Use **Batch Replace** to update texture paths to match the target game's directory structure.
-4. **Export**: The tool repacks the changes into a `.matbin` file for use in the target game.
+![Match Workflow](images/match.png)
+
+1. **Import Config**: Export the material JSON from the source model (via FLVER Editor) and import it into the **Material Replacement** module.
+2. **Match Materials**: Use the **Material Matching** function to identify compatible materials in the target game library based on mesh paths or names.
+3. **Batch Replace**: In **Material Replacement** → **Texture Edit** → **Batch Replace**, input the matched material name and execute.
+   - *Note*: If texture paths are empty, the tool automatically retrieves standard textures from the database and maps them to the correct sampler slots.
 
 ## Build from Source
 
