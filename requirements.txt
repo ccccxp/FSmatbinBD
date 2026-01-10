@@ -7,6 +7,9 @@ PySide6>=6.5.0
 # 打包工具
 pyinstaller>=6.0.0
 
+# 图标转换（PyInstaller 需要将 PNG 转换为 ICO）
+Pillow>=10.0.0
+
 # 数据库
 # SQLite 为 Python 内置，无需额外安装
 
