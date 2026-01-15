@@ -4,6 +4,7 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, Property
 from PySide6.QtGui import QPainter, QColor, QFont, QPen
+from src.core.i18n import _
 
 
 class LoadingOverlay(QWidget):
@@ -16,7 +17,7 @@ class LoadingOverlay(QWidget):
         self.setWindowFlags(Qt.FramelessWindowHint)
         
         self._angle = 0
-        self._text = "正在加载..."
+        self._text = _('loading')
         
         # 旋转动画定时器
         self._timer = QTimer(self)

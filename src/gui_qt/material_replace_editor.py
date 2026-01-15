@@ -668,8 +668,8 @@ class MaterialReplaceEditor(QMainWindow):
             from src.gui_qt.standard_dialogs import show_confirm_dialog
             confirmed = show_confirm_dialog(
                 self,
-                "加载采样器配置",
-                f"找到 {len(results)} 个匹配的材质。\n是否从 '{first_name}' 加载采样器配置？",
+                _('load_sampler_config'),
+                _('load_sampler_config_confirm').format(count=len(results), name=first_name),
             )
             
             if confirmed:

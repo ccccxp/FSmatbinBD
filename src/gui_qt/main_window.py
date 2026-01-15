@@ -493,7 +493,7 @@ class MaterialDatabaseMainWindow(QMainWindow):
         # 显示等待光标和状态栏提示
         from PySide6.QtGui import QCursor
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-        self.statusBar().showMessage("正在加载材质...")
+        self.statusBar().showMessage(_('loading_materials'))
         QApplication.processEvents()
         
         try:
@@ -512,9 +512,9 @@ class MaterialDatabaseMainWindow(QMainWindow):
                 if mid:
                     self._load_material_detail(mid)
             
-            self.statusBar().showMessage(f"已加载 {len(materials)} 个材质", 2000)
+            self.statusBar().showMessage(_('materials_loaded').format(count=len(materials)), 2000)
         except Exception as e:
-            self.statusBar().showMessage(f"加载失败: {e}", 3000)
+            self.statusBar().showMessage(_('load_failed_msg').format(error=e), 3000)
         finally:
             # 恢复正常光标
             QApplication.restoreOverrideCursor()
@@ -583,6 +583,7 @@ class MaterialDatabaseMainWindow(QMainWindow):
             self._load_material_detail(mid)
 
     def _load_material_detail(self, material_id: int):
+        import copy
         # 使用缓存避免重复查询数据库
         if not hasattr(self, '_material_cache'):
             self._material_cache = {}  # 简单的LRU缓存
@@ -590,14 +591,15 @@ class MaterialDatabaseMainWindow(QMainWindow):
             self._max_cache_size = 20  # 缓存最多20个材质
         
         if material_id in self._material_cache:
-            detail = self._material_cache[material_id]
+            # 深拷贝缓存数据，防止右侧面板修改影响缓存
+            detail = copy.deepcopy(self._material_cache[material_id])
             # 移到缓存末尾（最近使用）
             self._cache_order.remove(material_id)
             self._cache_order.append(material_id)
         else:
             detail = self.db.get_material_detail(material_id)
-            # 添加到缓存
-            self._material_cache[material_id] = detail
+            # 存储深拷贝到缓存，保持原始数据完整
+            self._material_cache[material_id] = copy.deepcopy(detail)
             self._cache_order.append(material_id)
             # 超出缓存大小时移除最旧的
             while len(self._cache_order) > self._max_cache_size:
@@ -640,7 +642,7 @@ class MaterialDatabaseMainWindow(QMainWindow):
                 combo.setCurrentIndex(idx)
                 lib_switched = True
             else:
-                print(f"警告：未在列表中找到库ID {library_id}")
+                print(_('warning_library_not_found').format(library_id=library_id))
                 # 兜底：直接切换内部状态
                 self._set_current_library(library_id)
                 lib_switched = True
@@ -696,150 +698,146 @@ class MaterialDatabaseMainWindow(QMainWindow):
             QMessageBox.warning(self, _('import_failed'), _('import_failed_msg').format(exc=exc, traceback=traceback.format_exc()))
 
     def _import_library_from_folder(self):
-        """对齐旧版 add_library(folder)：选择文件夹->解析XML->创建库->批量写入。"""
+        """从文件夹导入（支持 XML 和 matbin，使用统一的导入对话框）"""
         from PySide6.QtWidgets import QFileDialog
         folder = QFileDialog.getExistingDirectory(self, _('select_library_folder'))
         if not folder:
             return
+
         try:
             import os
-            import threading
-
-            from src.core.xml_parser import MaterialXMLParser
-            from .import_dialogs_qt import LibraryInfoDialogQt, create_busy_progress
+            from .dcx_import_dialog_qt import DCXImportDialogQt
 
             default_name = os.path.basename(folder.rstrip("/\\"))
-            info_dlg = LibraryInfoDialogQt(self, default_name=default_name)
-            if info_dlg.exec() != QDialog.Accepted or not info_dlg.result:
-                return
+            
+            # 使用 DCX 导入对话框（现已升级支持文件夹）
+            dlg = DCXImportDialogQt(self, self.db)
+            dlg.initialize(path=folder, name=default_name)
 
-            lib_name = info_dlg.result.name
-            lib_desc = info_dlg.result.description
-
-            progress = create_busy_progress(self, _('import_progress_title_folder'), _('import_progress_msg_folder'))
-            progress.show()
-
-            def work():
-                try:
-                    parser = MaterialXMLParser()
-                    materials_data = parser.parse_directory(folder)
-                    if not materials_data:
-                        self._ui_call(lambda: QMessageBox.information(self, _('import_progress_title_folder'), _('no_valid_xml_found')))
-                        return
-
-                    # 旧版：create_library(name, description, folder_path)
-                    if hasattr(self.db, "create_library"):
-                        library_id = self.db.create_library(lib_name, lib_desc, folder)
-                        if hasattr(self.db, "add_materials"):
-                            self.db.add_materials(library_id, materials_data)
-                    else:
-                        self.db.add_library(lib_name, folder, description=lib_desc)
-                        library_id = None
-
-                    def done_ui():
-                        self._load_libraries()
-                        if isinstance(library_id, int):
-                            for i in range(self.command_bar.library_combo.count()):
-                                data = self.command_bar.library_combo.itemData(i)
-                                if isinstance(data, dict) and data.get("id") == library_id:
-                                    self.command_bar.library_combo.setCurrentIndex(i)
-                                    break
-                                    break
-                        self._info(_('import_success_msg').format(lib_name=lib_name, count=len(materials_data)))
-
-                    self._ui_call(done_ui)
-                except Exception as exc:
-                    import traceback
-
-                    self._ui_call(lambda: QMessageBox.warning(self, _('import_failed'), _('import_folder_failed_msg').format(exc=exc, traceback=traceback.format_exc())))
-                finally:
-                    self._ui_call(progress.close)
-
-            thread = threading.Thread(target=work, daemon=True)
-            thread.start()
-
-            def on_cancel():
-                # 解析/导入本身目前不可中断；这里只做 UI 关闭，避免“卡死”感。
-                progress.close()
-
-            progress.canceled.connect(on_cancel)
+            def _after_import(result: Dict[str, Any]):
+                # 刷新库列表
+                self._load_libraries()
+                # 尝试选中新库
+                lib_id = result.get("library_id") if isinstance(result, dict) else None
+                if isinstance(lib_id, int):
+                    # 在 combo 里找到对应项
+                    for i in range(self.command_bar.library_combo.count()):
+                        data = self.command_bar.library_combo.itemData(i)
+                        if isinstance(data, dict) and data.get("id") == lib_id:
+                            self.command_bar.library_combo.setCurrentIndex(i)
+                            break
+            
+            dlg.imported.connect(_after_import)
+            dlg.exec()
 
         except Exception as exc:
             import traceback
             QMessageBox.warning(self, _('import_failed'), _('import_folder_failed_msg').format(exc=exc, traceback=traceback.format_exc()))
 
     def _import_single_xml(self):
-        """对齐旧版 import_single_xml：选择XML->解析->添加到当前库/新建临时库。"""
-        from PySide6.QtWidgets import QFileDialog
+        """导入单个XML (新逻辑：选择库、查重、路径修正)"""
+        from PySide6.QtWidgets import QFileDialog, QInputDialog
         file_path, _unused = QFileDialog.getOpenFileName(self, _('select_xml_file'), filter="XML Files (*.xml);;All Files (*.*)")
         if not file_path:
             return
+            
         try:
             import os
-            import threading
-
             from src.core.xml_parser import MaterialXMLParser
-            from .import_dialogs_qt import LibraryInfoDialogQt, create_busy_progress
+            from .import_dialogs_qt import ImportSingleXmlDialog
+            
+            # 1. 解析 XML (优先解析以获取信息供预览)
+            parser = MaterialXMLParser()
+            material_data = parser.parse_file(file_path)
+            if not material_data:
+                QMessageBox.warning(self, _('import_failed'), _('xml_parse_failed'))
+                return
+                
+            # 设置单独导入标记 (用于列表高亮)
+            material_data['is_single_import'] = 1
 
-            progress = create_busy_progress(self, _('import_mode_single_xml'), _('import_progress_msg_xml'))
-            progress.show()
-
-            def work():
-                try:
-                    parser = MaterialXMLParser()
-                    material_data = parser.parse_file(file_path)
-                    if not material_data:
-                        self._ui_call(lambda: QMessageBox.warning(self, _('import_failed'), _('xml_parse_failed')))
-                        return
-
-                    library_id = self.current_library_id
-                    # 旧版：若未选库则创建临时库（Qt 版补齐“库名/描述输入”）
-                    if not library_id and hasattr(self.db, "create_library"):
-                        default_name = os.path.splitext(os.path.basename(file_path))[0]
-                        info_dlg = LibraryInfoDialogQt(self, default_name=default_name)
-                        if info_dlg.exec() != QDialog.Accepted or not info_dlg.result:
-                            return
-                        library_id = self.db.create_library(info_dlg.result.name, info_dlg.result.description)
-                        self.current_library_id = library_id
-
-                    if library_id and hasattr(self.db, "add_materials"):
-                        self.db.add_materials(library_id, [material_data])
-                    else:
-                        self._ui_call(
-                            lambda: QMessageBox.information(
-                                self,
-                                _('import_mode_single_xml'),
-                                _('no_library_selected_for_xml'),
-                            )
-                        )
-                        return
-
-                    def done_ui():
-                        self._load_libraries()
-                        if isinstance(library_id, int):
-                            for i in range(self.command_bar.library_combo.count()):
-                                data = self.command_bar.library_combo.itemData(i)
-                                if isinstance(data, dict) and data.get("id") == library_id:
-                                    self.command_bar.library_combo.setCurrentIndex(i)
-                                    break
-                                    break
-                        self._info(_('import_xml_success'))
-
-                    self._ui_call(done_ui)
-
-                except Exception as exc:
-                    import traceback
-
-                    self._ui_call(lambda: QMessageBox.warning(self, _('import_failed'), _('import_xml_failed').format(exc=exc, traceback=traceback.format_exc())))
-                finally:
-                    self._ui_call(progress.close)
-
-            thread = threading.Thread(target=work, daemon=True)
-            thread.start()
-
-            progress.canceled.connect(progress.close)
+            # 2. 弹出导入预览对话框 (允许修改信息)
+            dlg = ImportSingleXmlDialog(self, self.db, material_data, current_lib_id=self.current_library_id)
+            if dlg.exec() != QDialog.Accepted:
+                return
+                
+            # 获取用户确认后的数据和库ID
+            material_data = dlg.material_data # 已经被对话框修改过
+            library_id = dlg.result_library_id
+            
+            if library_id is None:
+                # 新建库
+                name, desc = dlg.result_new_lib_info
+                library_id = self.db.create_library(name, desc)
+            
+            # 3. 查重
+            current_filename = material_data.get('filename') or material_data.get('file_name')
+            if not current_filename:
+                current_filename = os.path.splitext(os.path.basename(file_path))[0]
+            
+            while self.db.check_material_exists(library_id, current_filename):
+                # 冲突，提示重命名
+                new_name, ok = QInputDialog.getText(
+                    self, 
+                    _('file_rename_title'), 
+                    _('file_exists_msg').format(filename=current_filename),
+                    text=current_filename
+                )
+                if not ok:
+                    return # Cancelled
+                if not new_name.strip():
+                    continue
+                    
+                current_filename = new_name.strip()
+                
+                # 4. 同步更新数据 (如果不重命名则保持原样)
+                # 更新文件名
+                material_data['filename'] = current_filename
+                
+                # "需要注意是修改文件名后文件路径也需要同步修改前缀"
+                # 假设 file_path 是 "parts/bd/old_name.matbin"
+                old_path = material_data.get('file_path', '')
+                if old_path:
+                    dir_part = os.path.dirname(old_path)
+                    ext_part = os.path.splitext(old_path)[1]
+                    # 如果原路径没有后缀，ext_part 为空
+                    new_path = os.path.join(dir_part, current_filename + ext_part).replace("\\", "/")
+                    material_data['file_path'] = new_path
+                
+                # file_name (DB 中用于显示的另一个字段) 也要更新吗？通常保持和 filename 一致比较好
+                material_data['file_name'] = current_filename
+            
+            # 5. 写入数据库
+            self.db.add_materials(library_id, [material_data])
+            
+            # 6. UI 刷新
+            self._info(_('import_xml_success'))
+            self._load_libraries()
+            
+            # 尝试选中该库
+            for i in range(self.command_bar.library_combo.count()):
+                data = self.command_bar.library_combo.itemData(i)
+                if isinstance(data, dict) and data.get("id") == library_id:
+                    self.command_bar.library_combo.setCurrentIndex(i)
+                    break
+            
+            # 尝试选中该材质 (可选)
+            # material_id = cursor.lastrowid # add_materials bulk doesn't return list of ids easily
+            # 但我们可以刷新列表后 search 它
+            # 尝试选中该材质
+            # 防止触发两次搜索 (setText本身会触发textChanged)
+            self.command_bar.search_edit.blockSignals(True)
+            self.command_bar.search_edit.setText(current_filename)
+            self.command_bar.search_edit.blockSignals(False)
+            
+            # 延迟执行搜索，避免在导入对话框关闭的瞬间进行重绘导致可能的窗口闪烁或焦点问题
+            QTimer.singleShot(100, self._do_search)
+            
         except Exception as exc:
             import traceback
+            # 使用 logging 记录详细堆栈，而不是弹窗显示全部，避免吓到用户
+            import logging
+            logging.error(f"Import post-process failed: {exc}", exc_info=True)
             QMessageBox.warning(self, _('import_failed'), _('import_xml_failed').format(exc=exc, traceback=traceback.format_exc()))
 
     def _import_library_from_dcx(self):
@@ -891,8 +889,9 @@ class MaterialDatabaseMainWindow(QMainWindow):
             from src.core.xml_parser import MaterialXMLParser
             parser = MaterialXMLParser()
             
-            # 使用当前详情数据
-            export_data = dict(self.current_material)
+            # 使用深拷贝避免修改原始数据
+            import copy
+            export_data = copy.deepcopy(self.current_material)
             export_data['add_to_autopack'] = self.right_panel.autopack_check.isChecked()
             
             parser.export_material_to_xml(export_data, file_path)
@@ -901,7 +900,7 @@ class MaterialDatabaseMainWindow(QMainWindow):
             if export_data.get('add_to_autopack', False):
                 from src.core.autopack_manager import AutoPackManager
                 autopack_mgr = AutoPackManager()
-                autopack_mgr.add_material(file_path)
+                autopack_mgr.add_to_autopack(file_path)
                 self._info(_('export_autopack_success').format(file_path=file_path))
             else:
                 self._info(_('export_success').format(file_path=file_path))
@@ -1089,22 +1088,22 @@ class MaterialDatabaseMainWindow(QMainWindow):
             # 如果勾选了自动封包
             if export_data.get('add_to_autopack', False):
                 # TODO: 调用自动封包管理器添加
-                self._info("已导出并添加到自动封包队列")
+                self._info(_('export_added_to_autopack'))
                 try:
-                    toast(self, "已导出并添加到自动封包队列")
+                    toast(self, _('export_added_to_autopack'))
                 except Exception:
                     pass
             else:
-                self._info(f"导出成功: {file_path}")
+                self._info(_('export_success').format(file_path=file_path))
                 try:
-                    toast(self, f"导出成功: {file_path}")
+                    toast(self, _('export_success').format(file_path=file_path))
                 except Exception:
                     pass
                 
         except Exception as exc:
-            QMessageBox.warning(self, "导出失败", f"导出过程中出错: {exc}")
+            QMessageBox.warning(self, _('export_failed_title'), _('export_failed_msg').format(exc=exc, traceback=""))
             try:
-                toast(self, f"导出失败: {exc}", duration_ms=4200)
+                toast(self, _('export_failed_title') + f": {exc}", duration_ms=4200)
             except Exception:
                 pass
 
@@ -1133,14 +1132,14 @@ class MaterialDatabaseMainWindow(QMainWindow):
             left_panel = self.splitter.widget(0)
             if left_panel:
                 left_panel.setVisible(not left_panel.isVisible())
-                status = "已显示" if left_panel.isVisible() else "已隐藏"
-                self.statusBar().showMessage(f"侧边栏{status}", 2000)
+                status = _('sidebar_shown') if left_panel.isVisible() else _('sidebar_hidden')
+                self.statusBar().showMessage(status, 2000)
     
     def _toggle_samplers(self):
         """切换采样器显示/隐藏"""
         # 这个功能需要在MaterialEditorPanel中实现
         # 目前只显示提示
-        QMessageBox.information(self, "功能提示", "采样器显示/隐藏功能将在后续版本中实现")
+        QMessageBox.information(self, _('feature_hint'), _('sampler_toggle_hint'))
     
     def _show_about(self):
         """显示关于对话框"""

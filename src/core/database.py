@@ -89,9 +89,28 @@ class MaterialDatabase:
                         key_value TEXT,
                         created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        is_single_import INTEGER DEFAULT 0,
+                        is_modified INTEGER DEFAULT 0,
                         FOREIGN KEY (library_id) REFERENCES material_libraries (id)
                     )
                 ''')
+                
+                # Check and add columns for existing databases
+                try:
+                    cursor.execute("SELECT is_single_import FROM materials LIMIT 1")
+                except sqlite3.OperationalError:
+                    try:
+                        cursor.execute("ALTER TABLE materials ADD COLUMN is_single_import INTEGER DEFAULT 0")
+                    except Exception:
+                        pass
+                        
+                try:
+                    cursor.execute("SELECT is_modified FROM materials LIMIT 1")
+                except sqlite3.OperationalError:
+                    try:
+                        cursor.execute("ALTER TABLE materials ADD COLUMN is_modified INTEGER DEFAULT 0")
+                    except Exception:
+                        pass
                 
                 # 创建参数表
                 cursor.execute('''
@@ -395,8 +414,9 @@ class MaterialDatabase:
                 material_sql = '''
                     INSERT INTO materials (
                         library_id, file_path, file_name, filename, 
-                        shader_path, source_path, compression, key_value
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        shader_path, source_path, compression, key_value,
+                        is_single_import, is_modified
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 '''
                 param_sql = '''
                     INSERT INTO material_params (material_id, name, type, value, key_value, sort_order)
@@ -419,7 +439,9 @@ class MaterialDatabase:
                         material_data.get('shader_path', ''),
                         material_data.get('source_path', ''),
                         material_data.get('compression', ''),
-                        material_data.get('key', '')
+                        material_data.get('key', ''),
+                        material_data.get('is_single_import', 0),
+                        material_data.get('is_modified', 0)
                     ))
                     
                     material_id = cursor.lastrowid
@@ -495,7 +517,8 @@ class MaterialDatabase:
                 base_query = '''
                     SELECT DISTINCT m.id, m.library_id, m.file_path, m.file_name, 
                            m.filename, m.shader_path, m.source_path, m.compression, 
-                           m.key_value, m.created_time, l.name as library_name
+                           m.key_value, m.created_time, m.is_single_import, m.is_modified,
+                           l.name as library_name
                     FROM materials m
                     LEFT JOIN material_libraries l ON m.library_id = l.id
                 '''
@@ -565,7 +588,8 @@ class MaterialDatabase:
                 base_query = '''
                     SELECT DISTINCT m.id, m.library_id, m.file_path, m.file_name, 
                            m.filename, m.shader_path, m.source_path, m.compression, 
-                           m.key_value, m.created_time, l.name as library_name
+                           m.key_value, m.created_time, m.is_single_import, m.is_modified,
+                           l.name as library_name
                     FROM materials m
                     LEFT JOIN material_libraries l ON m.library_id = l.id
                     LEFT JOIN material_samplers s ON m.id = s.material_id
@@ -617,7 +641,8 @@ class MaterialDatabase:
                 base_query = '''
                     SELECT DISTINCT m.id, m.library_id, m.file_path, m.file_name, 
                            m.filename, m.shader_path, m.source_path, m.compression, 
-                           m.key_value, m.created_time, l.name as library_name
+                           m.key_value, m.created_time, m.is_single_import, m.is_modified,
+                           l.name as library_name
                     FROM materials m
                     LEFT JOIN material_libraries l ON m.library_id = l.id
                     LEFT JOIN material_samplers s ON m.id = s.material_id
@@ -1129,6 +1154,18 @@ class MaterialDatabase:
             logger.error(f"获取材质详情失败: {str(e)}")
             return None
     
+    def check_material_exists(self, library_id: int, filename: str) -> bool:
+        """检查材质是否存在"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                # 检查 filename (逻辑名) 或 file_name (实际xml文件名)
+                cursor.execute("SELECT 1 FROM materials WHERE library_id=? AND (filename=? OR file_name=?) LIMIT 1", (library_id, filename, filename))
+                return cursor.fetchone() is not None
+        except Exception as e:
+            logger.error(f"检查材质是否存在失败: {e}")
+            return False
+
     def update_material(self, material_id: int, material_data: Dict[str, Any]):
         """更新材质信息"""
         try:
@@ -1139,7 +1176,8 @@ class MaterialDatabase:
                 cursor.execute('''
                     UPDATE materials SET
                         filename = ?, shader_path = ?, source_path = ?, 
-                        compression = ?, key_value = ?, updated_time = CURRENT_TIMESTAMP
+                        compression = ?, key_value = ?, updated_time = CURRENT_TIMESTAMP,
+                        is_modified = 1
                     WHERE id = ?
                 ''', (
                     material_data.get('filename', ''),
@@ -1163,7 +1201,7 @@ class MaterialDatabase:
                         param.get('name', ''),
                         param.get('type', ''),
                         json.dumps(param.get('value')),
-                        param.get('key', ''),
+                        param.get('key_value', '') or param.get('key', ''),
                         param_index
                     ))
                 
@@ -1181,7 +1219,7 @@ class MaterialDatabase:
                         material_id,
                         sampler.get('type', ''),
                         sampler.get('path', ''),
-                        sampler.get('key', ''),
+                        sampler.get('key_value', '') or sampler.get('key', ''),
                         unk14.get('X', 0),
                         unk14.get('Y', 0),
                         sampler_index

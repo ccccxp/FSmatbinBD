@@ -689,19 +689,19 @@ class AdvancedSearchDialogQt(QDialog):
         }
         
         try:
-            self._update_status(f"正在搜索... (共 {len(conditions)} 个条件)")
+            self._update_status(_('searching_with_conditions').format(count=len(conditions)))
             
             # 执行搜索回调
             result_count = self.on_search_callback(criteria)
             
             if result_count is not None:
-                self._update_status(f"✓ 搜索完成：找到 {result_count} 个结果")
+                self._update_status(_('search_complete_with_results').format(count=result_count))
                 self.search_completed.emit(result_count)
             else:
-                self._update_status("✓ 搜索完成")
+                self._update_status(_('search_complete'))
                 
         except Exception as e:
-            self._update_status(f"❌ 搜索失败：{str(e)}")
+            self._update_status(_('search_failed_msg').format(error=str(e)))
     
     def _update_status(self, text: str):
         """更新状态显示"""

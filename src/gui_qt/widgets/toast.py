@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from PySide6.QtCore import QEasingCurve, QObject, QPoint, QPropertyAnimation, QTimer, Qt
+from PySide6.QtCore import QEasingCurve, QObject, QPoint, QPropertyAnimation, QTimer, Qt, QEvent
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication, QFrame, QGraphicsDropShadowEffect, QLabel, QWidget
 
@@ -118,9 +118,9 @@ class ToastManager(QObject):
         parent_window.installEventFilter(self)
 
     def eventFilter(self, obj: QObject, event) -> bool:  # type: ignore[override]
-        # 父窗口移动/缩放时重新布局
-        if obj is self._parent_window and event.type() in (event.Move, event.Resize):
-            self._relayout()
+        if obj is self._parent_window and event.type() in (QEvent.Move, QEvent.Resize):
+            # 窗口移动或大小时重新定位
+            self._update_position()
         return super().eventFilter(obj, event)
 
     def show(self, text: str, *, duration_ms: int = 2600):

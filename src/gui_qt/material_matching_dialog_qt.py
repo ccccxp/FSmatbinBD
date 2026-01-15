@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
 )
 from .smooth_scroll import SmoothTableWidget
 from src.utils.resource_path import get_assets_path
+from src.core.i18n import _
 
 
 
@@ -1206,19 +1207,19 @@ class MaterialMatchingDialogQt(QDialog):
         page_row.setContentsMargins(0, 8, 0, 0)
         page_row.setSpacing(8)
         
-        self.page_prev_btn = QPushButton("◀ 上一页")
+        self.page_prev_btn = QPushButton(_('prev_page'))
         self.page_prev_btn.setFixedWidth(90)
         self.page_prev_btn.clicked.connect(self._on_prev_page)
         
-        self.page_label = QLabel("第 1/1 页")
+        self.page_label = QLabel(_('page_info').format(current=1, total=1))
         self.page_label.setAlignment(Qt.AlignCenter)
         self.page_label.setMinimumWidth(120)
         
-        self.page_next_btn = QPushButton("下一页 ▶")
+        self.page_next_btn = QPushButton(_('next_page'))
         self.page_next_btn.setFixedWidth(90)
         self.page_next_btn.clicked.connect(self._on_next_page)
         
-        self.page_info_label = QLabel("共 0 条结果")
+        self.page_info_label = QLabel(_('total_results').format(count=0))
         self.page_info_label.setStyleSheet("color: rgba(255,255,255,0.7);")
         
         # close button merged into pagination row
@@ -1641,15 +1642,15 @@ class MaterialMatchingDialogQt(QDialog):
             self.exact_btn.setEnabled(True)
             self.fast_btn.setEnabled(True)
             self.stop_btn.setEnabled(False)
-            self.progress_label.setText("已取消")
+            self.progress_label.setText(_('match_cancelled'))
 
     # ---------------- slots ----------------
     def _on_progress(self, percent: int, processed: int, total: int):
         self.progress_bar.setValue(percent)
         if total:
-            self.progress_label.setText(f"匹配中… {processed}/{total}")
+            self.progress_label.setText(_('match_in_progress').format(processed=processed, total=total))
         else:
-            self.progress_label.setText(f"匹配中… {percent}%")
+            self.progress_label.setText(_('match_in_progress_percent').format(percent=percent))
 
         # 保障 UI 实时刷新：在高频进度下做轻量节流，避免卡顿
         try:
@@ -1669,9 +1670,9 @@ class MaterialMatchingDialogQt(QDialog):
         self.stop_btn.setEnabled(False)
 
         if error:
-            self.progress_label.setText("失败")
+            self.progress_label.setText(_('match_failed'))
             # 只在确实失败时提示；该弹窗是正常提示，不是“异常窗口”
-            QMessageBox.warning(self, "匹配失败", str(error))
+            QMessageBox.warning(self, _('match_failed_title'), str(error))
             return
 
         self._last_results = results or []
@@ -1683,18 +1684,18 @@ class MaterialMatchingDialogQt(QDialog):
         except Exception:
             pass
         self.export_btn.setEnabled(bool(self._last_results))
-        self.progress_label.setText(f"完成：{len(self._last_results)} 条")
+        self.progress_label.setText(_('match_completed').format(count=len(self._last_results)))
         self.progress_bar.setValue(100)
         self._fill_results(self._last_results)
 
     def _export_results(self):
         if not self._last_results:
-            QMessageBox.information(self, "提示", "没有可导出的结果")
+            QMessageBox.information(self, _('hint'), _('no_export_results'))
             return
 
         file_path, _unused = QFileDialog.getSaveFileName(
             self,
-            "导出匹配结果",
+            _('export_match_results'),
             "matching_results.csv",
             "CSV Files (*.csv);;All Files (*)",
         )
@@ -1729,7 +1730,7 @@ class MaterialMatchingDialogQt(QDialog):
                         )
                     w.writerow([similarity, lib_name, target_name, details_text])
 
-            QMessageBox.information(self, "导出成功", f"已导出到：\n{file_path}")
+            QMessageBox.information(self, _('export_success'), _('export_success_path').format(path=file_path))
         except Exception as e:
             QMessageBox.warning(self, _('export_failed'), str(e))
 
@@ -1745,8 +1746,8 @@ class MaterialMatchingDialogQt(QDialog):
         total_pages = max(1, (total + self._page_size - 1) // self._page_size)
         
         # 更新分页信息
-        self.page_label.setText(f"第 {self._current_page + 1}/{total_pages} 页")
-        self.page_info_label.setText(f"共 {total} 条结果")
+        self.page_label.setText(_('page_info').format(current=self._current_page + 1, total=total_pages))
+        self.page_info_label.setText(_('total_results').format(count=total))
         
         # 更新按钮状态
         self.page_prev_btn.setEnabled(self._current_page > 0)
@@ -1817,38 +1818,36 @@ class MaterialMatchingDialogQt(QDialog):
                 if "material_keywords" in details:
                     score = details["material_keywords"]
                     if isinstance(score, (int, float)):
-                        score_items.append(f"材质关键词:{score:.0f}%")
+                        score_items.append(f"{_('material_keywords_score').split(':')[0]}:{score:.0f}%")
                 
                 if "sampler_count" in details:
                     score = details["sampler_count"]
                     if isinstance(score, (int, float)):
                         score_items.append(
-                            f"采样器: {source_sampler_count}(源)→{target_sampler_count}个 "
-                            f"(相似度{score:.0f}%)"
+                            _('sampler_count_score').format(source=source_sampler_count, target=target_sampler_count, score=score)
                         )
                 
                 if "sampler_types" in details:
                     score = details["sampler_types"]
                     if isinstance(score, (int, float)):
-                        score_items.append(f"采样器类型:{score:.0f}%")
+                        score_items.append(f"{_('sampler_types_score').split(':')[0]}:{score:.0f}%")
                 
                 if "parameters" in details:
                     score = details["parameters"]
                     if isinstance(score, (int, float)):
                         score_items.append(
-                            f"参数: {source_param_count}(源)→{target_param_count}个 "
-                            f"(相似度{score:.0f}%)"
+                            _('parameters_score').format(source=source_param_count, target=target_param_count, score=score)
                         )
                 
                 if "shader_path" in details:
                     score = details["shader_path"]
                     if isinstance(score, (int, float)):
-                        score_items.append(f"Shader路径:{score:.0f}%")
+                        score_items.append(f"{_('shader_path_score').split(':')[0]}:{score:.0f}%")
                 
                 if "sampler_paths" in details:
                     score = details["sampler_paths"]
                     if isinstance(score, (int, float)):
-                        score_items.append(f"采样器路径:{score:.0f}%")
+                        score_items.append(f"{_('sampler_paths_score').split(':')[0]}:{score:.0f}%")
                 
                 details_text = ", ".join(score_items)
             detail_item = QTableWidgetItem(details_text)
@@ -1869,7 +1868,7 @@ class MaterialMatchingDialogQt(QDialog):
         if not text:
             return
         QApplication.clipboard().setText(text)
-        self.progress_label.setText(f"已复制：{text}")
+        self.progress_label.setText(_('copied_text').format(text=text))
 
     def _on_result_clicked(self, row: int, column: int):
         """点击搜索结果时，在主界面中选中该材质"""
@@ -1902,7 +1901,7 @@ class MaterialMatchingDialogQt(QDialog):
         try:
             # 使用新的选中方法：会自动切换库、加载列表、选中材质
             main_window.select_material_by_id(target_id, target_lib_id)
-            self.progress_label.setText(f"已切换到：{target_name}")
+            self.progress_label.setText(_('switched_to').format(name=target_name))
         except Exception as e:
-            self.progress_label.setText(f"切换失败：{str(e)}")
+            self.progress_label.setText(_('switch_failed').format(error=str(e)))
 

@@ -128,7 +128,7 @@ class SamplerPanel(QFrame):
         return "column_widths"
 
     def _restore_column_widths(self):
-        """恢复用户保存的固定列宽度（Key/X/Y）"""
+        """恢复用户保存的所有列宽度"""
         header = self.table.horizontalHeader() if hasattr(self, 'table') else None
         model = self.table.model() if hasattr(self, 'table') else None
         if header is None or model is None:
@@ -153,31 +153,26 @@ class SamplerPanel(QFrame):
         self._restoring_columns = True
         try:
             col_count = model.columnCount()
-            # 固定列索引：Key(2), X(3), Y(4)
-            fixed_cols = [2, 3, 4]
-            for i, col in enumerate(fixed_cols):
-                if col < col_count and i < len(widths):
-                    w = int(widths[i])
-                    if w > 10:
-                        header.resizeSection(col, w)
+            # 恢复所有列的宽度
+            for i, w in enumerate(widths):
+                if i < col_count and w > 10:
+                    header.resizeSection(i, w)
             return True
         finally:
             self._restoring_columns = False
 
     def _save_column_widths(self):
-        """保存固定列的宽度（Key/X/Y）"""
+        """保存所有列的宽度"""
         header = self.table.horizontalHeader() if hasattr(self, 'table') else None
         model = self.table.model() if hasattr(self, 'table') else None
         if header is None or model is None:
             return
 
         col_count = model.columnCount()
-        # 只保存固定列（2,3,4）的宽度
-        fixed_cols = [2, 3, 4]
+        # 保存所有列的宽度
         widths = []
-        for col in fixed_cols:
-            if col < col_count:
-                widths.append(header.sectionSize(col))
+        for col in range(col_count):
+            widths.append(header.sectionSize(col))
         if widths:
             self._settings.setValue(self._settings_key(), ",".join(str(w) for w in widths))
 
@@ -227,7 +222,7 @@ class SamplerPanel(QFrame):
             self._apply_column_widths()
 
     def _apply_column_widths(self):
-        """应用列宽：类型和路径自适应（Stretch），Key/X/Y固定宽度"""
+        """应用列宽：所有列均可调整宽度，路径列显示完整内容"""
         model = self.table.model()
         if not model:
             return
@@ -239,34 +234,33 @@ class SamplerPanel(QFrame):
         header = self.table.horizontalHeader()
         
         # 列顺序: 类型(0), 路径(1), Key(2), X(3), Y(4)
-        # 类型和路径：Stretch 自适应窗口大小
-        # Key/X/Y：Fixed 固定宽度
+        # 所有列均使用 Interactive 模式，允许用户调整宽度
+        # 设置合理的默认宽度，路径列给予较大宽度以显示完整路径
         
-        # 类型和路径列使用 Stretch 自适应
-        if col_count > 0:
-            header.setSectionResizeMode(0, QHeaderView.Stretch)  # 类型
-        if col_count > 1:
-            header.setSectionResizeMode(1, QHeaderView.Stretch)  # 路径
+        # 默认列宽设置
+        default_widths = {
+            0: 200,   # 类型 - 较大宽度
+            1: 300,   # 路径 - 更大宽度以显示完整路径
+            2: 100,   # Key
+            3: 45,    # X
+            4: 45,    # Y
+        }
         
-        # 固定列设置模式
-        fixed_cols = [2, 3, 4]  # Key, X, Y
-        for col in fixed_cols:
-            if col < col_count:
-                header.setSectionResizeMode(col, QHeaderView.Fixed)
+        # 所有列均使用 Interactive 模式（用户可调整）
+        for col in range(col_count):
+            header.setSectionResizeMode(col, QHeaderView.Interactive)
         
-        # 尝试恢复用户保存的固定列宽度
+        # 尝试恢复用户保存的列宽度（所有列）
         restored = self._restore_column_widths()
         
+        # 如果没有恢复保存的宽度，应用默认宽度
         if not restored:
-            # 无保存值时使用默认固定列宽
-            default_fixed_widths = {
-                2: 100,  # Key
-                3: 45,   # X
-                4: 45,   # Y
-            }
-            for col, width in default_fixed_widths.items():
+            for col, width in default_widths.items():
                 if col < col_count:
                     header.resizeSection(col, width)
+        
+        # 最后一列不自动拉伸，保持用户设定的宽度
+        header.setStretchLastSection(False)
         
         # 强制刷新视图
         self.table.viewport().update()

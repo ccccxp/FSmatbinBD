@@ -17,7 +17,7 @@ from typing import List, Dict, Optional, Tuple, Callable
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from src.utils.resource_path import get_tools_path, get_data_path
+from src.utils.resource_path import get_tools_path, get_data_path, get_base_path, get_exe_dir
 
 logger = logging.getLogger(__name__)
 
@@ -40,31 +40,49 @@ class WitchyBNDProcessor:
         logger.info(f"WitchyBND处理器初始化 - 工具路径: {self.witchybnd_path}, 最大线程数: {self.max_threads}")
         
     def _find_witchybnd_path(self) -> str:
-        """自动查找WitchyBND工具路径（支持打包环境）"""
-        # 优先使用资源路径辅助模块获取打包环境下的路径
-        packed_path = get_tools_path("WitchyBND/WitchyBND.exe")
-        if os.path.exists(packed_path):
-            return packed_path
+        """自动查找WitchyBND工具路径（支持打包环境与开发环境）"""
+        # 候选路径列表
+        candidates = []
         
-        # 兼容开发环境的相对路径
-        possible_paths = [
-            "tools/WitchyBND/WitchyBND.exe",  # 项目内置工具 (首选)
-            "WitchyBND/WitchyBND.exe",        # 相对路径
-            "../WitchyBND/WitchyBND.exe",     # 上级目录
-            "../../WitchyBND/WitchyBND.exe",  # 上上级目录
+        # 1. 通过 helper 获取的标准打包路径 (优先尝试)
+        candidates.append(get_tools_path("WitchyBND/WitchyBND.exe"))
+        
+        # 2. 相对于 Base Path (资源根目录) - 处理 PyInstaller/Nuitka 差异
+        base_path = get_base_path()
+        candidates.append(os.path.join(base_path, "WitchyBND", "WitchyBND.exe"))
+        candidates.append(os.path.join(base_path, "tools", "WitchyBND", "WitchyBND.exe"))
+
+        # 3. 相对于 Exe Dir (可执行文件目录) - 处理 Nuitka 某些打包模式下的释放位置
+        exe_dir = get_exe_dir()
+        if exe_dir and exe_dir != base_path:
+             candidates.append(os.path.join(exe_dir, "WitchyBND", "WitchyBND.exe"))
+             candidates.append(os.path.join(exe_dir, "tools", "WitchyBND", "WitchyBND.exe"))
+
+        # 4. 开发环境相对路径 (Fallback)
+        # 注意：打包后 CWD 可能不是 exe 目录，因此使用 os.path.abspath 可能不准确，但在开发环境有效
+        dev_paths = [
+            "tools/WitchyBND/WitchyBND.exe",
+            "WitchyBND/WitchyBND.exe",
+            "../WitchyBND/WitchyBND.exe",
+            "../../WitchyBND/WitchyBND.exe",
         ]
+        candidates.extend([os.path.abspath(p) for p in dev_paths])
         
-        for path in possible_paths:
-            if os.path.exists(path):
+        # 遍历检查是否存在
+        for path in candidates:
+            if path and os.path.exists(path):
+                logger.info(f"找到 WitchyBND: {path}")
                 return os.path.abspath(path)
-        
-        # 如果找不到，返回默认路径
-        return get_tools_path("WitchyBND/WitchyBND.exe")
+                
+        # 如果找不到，返回默认的 get_tools_path 结果，让后续调用报错明确
+        default_path = get_tools_path("WitchyBND/WitchyBND.exe")
+        logger.warning(f"未能自动定位 WitchyBND，回退到默认路径: {default_path}")
+        return default_path
     
     def _run_witchy_drag_drop(self, target_path: str, timeout: int = 300) -> Tuple[bool, str]:
         """
-        使用改进的方式执行WitchyBND模拟拖放操作
-        参考批量解包工具的成功实现
+        使用 WitchyBND 处理单个文件
+        使用 -p (passive) 模式避免任何用户交互提示
         
         Args:
             target_path: 目标文件路径
@@ -75,63 +93,52 @@ class WitchyBNDProcessor:
         """
         try:
             with self.thread_lock:
-                logger.info(f"使用批量解包工具的成功实现方式")
-                logger.info(f"WitchyBND路径: {self.witchybnd_path}")
-                logger.info(f"目标文件: {target_path}")
+                logger.info(f"WitchyBND处理文件: {target_path}")
             
-            # 构建命令 - 直接将目标路径作为参数传递给exe
-            cmd = [self.witchybnd_path, target_path]
+            # 确保路径是绝对路径
+            abs_target_path = os.path.abspath(target_path)
+            
+            # 使用 -p (passive) 模式：不提示用户输入，适合脚本自动执行
+            # 使用 -s (silent) 模式：抑制控制台输出，避免 PromptPlus 问题
+            cmd = [self.witchybnd_path, "-p", "-s", abs_target_path]
             
             with self.thread_lock:
-                logger.info(f"执行命令: {' '.join(cmd)}")
+                logger.info(f"执行命令: {cmd}")
             
-            # 使用批量解包工具的成功方法：
-            # 1. 使用Popen而不是run
-            # 2. 重定向stdin但不重定向stdout/stderr
-            # 3. 让WitchyBND在stdin重定向时自动跳过"Press any key"等待
-            process = subprocess.Popen(
+            # 使用 subprocess.run 并捕获输出以便调试
+            # 设置 cwd 到目标文件所在目录，避免路径相关问题
+            target_dir = os.path.dirname(abs_target_path)
+            
+            result = subprocess.run(
                 cmd,
-                stdin=subprocess.PIPE,  # 重定向stdin以避免"Press any key"等待
+                timeout=timeout,
+                cwd=target_dir,
+                capture_output=True,  # 捕获 stdout/stderr
                 text=True,
-                encoding='utf-8',
-                errors='ignore'
-                # 不重定向stdout/stderr，让WitchyBND控制台正常显示
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
             )
             
-            # 等待进程完成，设置合理的超时时间
-            try:
-                return_code = process.wait(timeout=timeout)
+            with self.thread_lock:
+                logger.info(f"WitchyBND返回码: {result.returncode}")
+                if result.stdout:
+                    logger.debug(f"WitchyBND stdout: {result.stdout[:500]}")
+                if result.stderr:
+                    logger.warning(f"WitchyBND stderr: {result.stderr[:500]}")
+            
+            # -p 模式下正常返回 0
+            if result.returncode == 0:
+                return True, ""
+            else:
+                # 非零返回码，记录详细错误信息
+                error_msg = result.stderr or result.stdout or f"返回码: {result.returncode}"
+                logger.warning(f"WitchyBND返回非零码: {result.returncode}, 错误: {error_msg[:200]}")
+                # 仍可能成功处理，依赖后续文件检查
+                return True, error_msg
                 
-                with self.thread_lock:
-                    logger.info(f"WitchyBND返回码: {return_code}")
-                
-                # 重要：WitchyBND在stdin重定向时会返回非零码但实际解包成功
-                # 控制台交互异常（InvalidOperationException）不影响实际处理结果
-                # 我们主要依赖后续的文件检查来判断成功，而不是返回码
-                if return_code == 3762504530:
-                    logger.info("WitchyBND控制台错误（可忽略），通过文件检查确认成功")
-                    return True, ""
-                elif return_code == 0:
-                    logger.info("WitchyBND执行成功")
-                    return True, ""
-                else:
-                    # 其他非零返回码，包括控制台交互异常，仍然返回成功，依赖文件检查
-                    with self.thread_lock:
-                        logger.info(f"WitchyBND返回非零码: {return_code}（通常因控制台交互异常，实际处理可能成功）")
-                    return True, ""
-                    
-            except subprocess.TimeoutExpired:
-                with self.thread_lock:
-                    logger.error(f"WitchyBND执行超时（{timeout}秒）")
-                process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    with self.thread_lock:
-                        logger.error("强制终止WitchyBND进程")
-                return False, f"WitchyBND执行超时（{timeout}秒）"
-                
+        except subprocess.TimeoutExpired:
+            with self.thread_lock:
+                logger.error(f"WitchyBND执行超时（{timeout}秒）")
+            return False, f"WitchyBND执行超时（{timeout}秒）"
         except FileNotFoundError:
             error_msg = f"WitchyBND工具未找到: {self.witchybnd_path}"
             with self.thread_lock:
@@ -143,9 +150,125 @@ class WitchyBNDProcessor:
                 logger.error(error_msg)
             return False, error_msg
 
+    def extract_dcx_recursive(self, dcx_file: str, timeout: int = 600) -> Tuple[bool, str, str]:
+        """
+        使用 WitchyBND -c -p 命令递归解包 DCX 文件并转换所有 matbin 为 XML
+        
+        这是一个一站式解决方案：
+        - 解包 DCX 压缩
+        - 解包 BND 结构  
+        - 将所有 matbin 文件转换为 XML
+        
+        Args:
+            dcx_file: DCX 文件路径
+            timeout: 超时时间（秒），默认10分钟
+            
+        Returns:
+            (成功标志, 错误信息, 输出目录路径)
+        """
+        if not os.path.exists(dcx_file):
+            return False, f"DCX文件不存在: {dcx_file}", ""
+            
+        if not os.path.exists(self.witchybnd_path):
+            return False, f"WitchyBND工具未找到: {self.witchybnd_path}", ""
+        
+        dcx_file = os.path.abspath(dcx_file)
+        dcx_dir = os.path.dirname(dcx_file)
+        dcx_basename = os.path.basename(dcx_file)
+        
+        logger.info(f"开始递归解包 DCX 文件: {dcx_file}")
+        
+        # 使用 -c (recursive) 和 -p (passive) 模式
+        # -c: 递归处理 BND 内部的文件
+        # -p: 被动模式，不提示用户输入
+        cmd = [self.witchybnd_path, "-c", "-p", dcx_file]
+        
+        logger.info(f"执行命令: {' '.join(cmd)}")
+        
+        try:
+            # 关键：必须设置 cwd 为 DCX 文件所在目录
+            # 否则在打包后的 EXE 环境中，工作目录可能不正确导致输出目录查找失败
+            result = subprocess.run(
+                cmd,
+                timeout=timeout,
+                cwd=dcx_dir  # 在 DCX 文件目录执行，确保输出在同一目录
+            )
+            
+            logger.info(f"WitchyBND返回码: {result.returncode}")
+            
+            # 查找解包后的输出目录
+            # WitchyBND 会在同目录下创建与 DCX 同名（去掉扩展名）的文件夹
+            possible_output_dirs = []
+            
+            # 移除可能的多层扩展名 (.matbinbnd.dcx -> 文件夹名)
+            base_name = dcx_basename
+            for ext in ['.dcx', '.matbinbnd', '.mtdbnd', '.bnd']:
+                if base_name.lower().endswith(ext):
+                    base_name = base_name[:-len(ext)]
+            
+            # 常见的输出目录模式 - 扩展以支持更多WitchyBND输出模式
+            possible_output_dirs = [
+                # 标准模式：去掉扩展名
+                os.path.join(dcx_dir, base_name),
+                os.path.join(dcx_dir, dcx_basename.replace('.dcx', '')),
+                # WitchyBND 特殊后缀模式
+                os.path.join(dcx_dir, dcx_basename + "-witchy"),
+                os.path.join(dcx_dir, base_name + "-wmatbinbnd"),
+                os.path.join(dcx_dir, base_name + "-matbinbnd-dcx-wmatbinbnd"),
+                os.path.join(dcx_dir, dcx_basename.replace('.dcx', '') + "-wmatbinbnd"),
+                # 完全去除所有扩展名后的模式
+                os.path.join(dcx_dir, base_name.replace('.matbinbnd', '').replace('.mtdbnd', '')),
+            ]
+            
+            # 还需要动态扫描目录，查找可能的输出目录（最近创建的目录）
+            try:
+                for item in os.listdir(dcx_dir):
+                    item_path = os.path.join(dcx_dir, item)
+                    if os.path.isdir(item_path):
+                        # 如果目录名包含原文件名的一部分，可能是输出目录
+                        if base_name.lower() in item.lower() or item.lower() in dcx_basename.lower():
+                            if item_path not in possible_output_dirs:
+                                possible_output_dirs.append(item_path)
+            except Exception as e:
+                logger.warning(f"扫描目录时出错: {e}")
+            
+            output_dir = ""
+            for dir_path in possible_output_dirs:
+                if os.path.isdir(dir_path):
+                    output_dir = dir_path
+                    break
+            
+            if output_dir:
+                # 统计生成的 XML 文件数量
+                xml_count = 0
+                for root, dirs, files in os.walk(output_dir):
+                    for f in files:
+                        if f.endswith('.xml'):
+                            xml_count += 1
+                
+                logger.info(f"递归解包完成: 输出目录 {output_dir}, 生成 {xml_count} 个 XML 文件")
+                return True, "", output_dir
+            else:
+                # 列出目录中实际存在的内容以帮助调试
+                try:
+                    existing_dirs = [d for d in os.listdir(dcx_dir) if os.path.isdir(os.path.join(dcx_dir, d))]
+                    logger.warning(f"未找到输出目录，检查的路径: {possible_output_dirs}")
+                    logger.warning(f"目录 {dcx_dir} 中实际存在的子目录: {existing_dirs}")
+                except Exception as e:
+                    logger.warning(f"列出目录内容失败: {e}")
+                return False, "未找到解包输出目录", ""
+                
+        except subprocess.TimeoutExpired:
+            logger.error(f"WitchyBND执行超时（{timeout}秒）")
+            return False, f"WitchyBND执行超时（{timeout}秒）", ""
+        except Exception as e:
+            logger.error(f"WitchyBND执行异常: {str(e)}")
+            return False, str(e), ""
+
     def _run_witchy_batch(self, target_paths: List[str], timeout: int = 300) -> Tuple[bool, str]:
         """
-        批量执行 WitchyBND 操作
+        批量执行 WitchyBND 操作 - 传递文件列表
+        使用 -p (passive) 模式避免用户交互
         
         Args:
             target_paths: 目标文件路径列表
@@ -158,39 +281,28 @@ class WitchyBNDProcessor:
             return True, ""
             
         try:
-            # 构建命令 - 将所有目标路径作为参数传递
-            cmd = [self.witchybnd_path] + target_paths
+            # 构建命令 - 使用 -p 参数并传递所有目标路径
+            cmd = [self.witchybnd_path, "-p"] + target_paths
             
             # 检查命令行长度限制 (Windows 限制约 32767 字符)
             cmd_len = sum(len(arg) + 1 for arg in cmd)
             if cmd_len > 32000:
                 logger.warning(f"命令行过长 ({cmd_len}), 建议分更小的批次")
             
-            # 使用Popen而不是run
-            process = subprocess.Popen(
+            # 使用 subprocess.run，不重定向 I/O（WitchyBND PromptPlus 需要真实控制台）
+            result = subprocess.run(
                 cmd,
-                stdin=subprocess.PIPE,
-                text=True,
-                encoding='utf-8',
-                errors='ignore'
+                timeout=timeout
             )
             
-            try:
-                return_code = process.wait(timeout=timeout)
+            if result.returncode == 0:
+                return True, ""
+            else:
+                return True, f"返回码 {result.returncode}"  # 依赖文件检查
                 
-                if return_code == 0 or return_code == 3762504530:
-                    return True, ""
-                else:
-                    return True, f"返回码 {return_code}" # 同样依赖文件检查
-                    
-            except subprocess.TimeoutExpired:
-                process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                return False, f"批量操作超时（{timeout}秒）"
-                
+        except subprocess.TimeoutExpired:
+            logger.error(f"批量操作超时（{timeout}秒）")
+            return False, f"批量操作超时（{timeout}秒）"
         except Exception as e:
             logger.error(f"WitchyBND批量执行异常: {str(e)}")
             return False, str(e)
@@ -746,6 +858,8 @@ class WitchyBNDProcessor:
         清理XML文件，保留.matbin源文件
         只删除成功解析的XML文件
         
+        注意: 不会删除 _witchy-*.xml 清单文件，因为这些文件是重新封包所必需的
+        
         Args:
             xml_files: 要清理的XML文件列表
         """
@@ -754,10 +868,18 @@ class WitchyBNDProcessor:
             return
             
         cleaned_count = 0
+        skipped_count = 0
         failed_count = 0
         
         for xml_file in xml_files:
             try:
+                # 跳过 _witchy-*.xml 清单文件，这些文件是重新封包所必需的
+                filename = os.path.basename(xml_file)
+                if filename.startswith('_witchy-') and filename.endswith('.xml'):
+                    skipped_count += 1
+                    logger.debug(f"保留Witchy清单文件: {filename}")
+                    continue
+                
                 if os.path.exists(xml_file):
                     os.remove(xml_file)
                     cleaned_count += 1
@@ -768,7 +890,7 @@ class WitchyBNDProcessor:
                 failed_count += 1
                 logger.warning(f"清理XML文件失败 {xml_file}: {str(e)}")
         
-        logger.info(f"XML清理完成: 删除 {cleaned_count} 个文件, 失败 {failed_count} 个文件")
+        logger.info(f"XML清理完成: 删除 {cleaned_count} 个文件, 跳过 {skipped_count} 个Witchy清单文件, 失败 {failed_count} 个文件")
     
     def cleanup(self):
         """清理临时目录"""
@@ -844,7 +966,10 @@ class WitchyBNDProcessor:
     
     def extract_matbin_to_xml_batch(self, matbin_files: List[str], callback=None) -> Dict[str, str]:
         """
-        批量多线程转换MATBIN文件为XML（优化版：8线程并发执行批处理）
+        批量转换MATBIN文件为XML - 顺序执行版本
+        
+        使用通配符模式：按目录分组，对每个目录顺序执行 WitchyBND.exe *.matbin
+        避免多线程可能导致的进程冲突
         
         Args:
             matbin_files: MATBIN文件路径列表
@@ -855,64 +980,79 @@ class WitchyBNDProcessor:
         """
         results = {}
         
-        # 将文件分批，每批50个
-        batch_size = 50
-        batches = [matbin_files[i:i + batch_size] for i in range(0, len(matbin_files), batch_size)]
+        if not matbin_files:
+            return results
+        
+        # 按目录分组文件
+        dir_groups: Dict[str, List[str]] = {}
+        for path in matbin_files:
+            abs_path = os.path.abspath(path)
+            directory = os.path.dirname(abs_path)
+            if directory not in dir_groups:
+                dir_groups[directory] = []
+            dir_groups[directory].append(abs_path)
         
         total_files = len(matbin_files)
         processed_count = 0
-        count_lock = threading.Lock() # 用于保护计数器的锁
         
-        logger.info(f"开始批量转换 {total_files} 个文件，分 {len(batches)} 批，使用 8 线程并发处理")
+        logger.info(f"开始批量转换 {total_files} 个文件，分布在 {len(dir_groups)} 个目录中（顺序执行模式）")
         
-        def process_batch(batch_index, batch):
-            nonlocal processed_count
-            batch_results = {}
+        # 注意：WitchyBND 使用 PromptPlus 控制台库，不能使用 CREATE_NO_WINDOW 或重定向 I/O
+        # 否则会导致程序崩溃。因此会有控制台窗口短暂闪烁，这是正常现象。
+        
+        # 顺序处理每个目录
+        for dir_index, (directory, files) in enumerate(dir_groups.items()):
             try:
-                # 执行批处理
-                success, error = self._run_witchy_batch(batch, timeout=600)
+                # 确定文件扩展名（.matbin 或 .mtd）
+                extensions = set()
+                for f in files:
+                    ext = os.path.splitext(f)[1].lower()
+                    if ext in ['.matbin', '.mtd']:
+                        extensions.add(ext)
                 
-                # 检查结果并更新进度
-                for matbin_file in batch:
+                # 对每种扩展名使用通配符模式执行一次
+                for ext in extensions:
+                    wildcard_pattern = f"*{ext}"
+                    # 使用 -p (passive) 模式避免用户交互
+                    cmd = [self.witchybnd_path, "-p", wildcard_pattern]
+                    
+                    logger.info(f"[{dir_index+1}/{len(dir_groups)}] 在目录 {directory} 中执行: {self.witchybnd_path} -p {wildcard_pattern}")
+                    
+                    try:
+                        # 重要：不能重定向 stdin/stdout/stderr，因为 WitchyBND 使用的 PromptPlus 
+                        # 控制台库在标准流被重定向时会崩溃
+                        result = subprocess.run(
+                            cmd,
+                            cwd=directory,
+                            timeout=600
+                            # 不设置 stdin/stdout/stderr，让 WitchyBND 使用真实控制台
+                        )
+                        
+                        logger.info(f"目录 {directory} 处理完成，返回码: {result.returncode}")
+                        
+                    except subprocess.TimeoutExpired:
+                        logger.error(f"目录 {directory} 处理超时")
+                
+                # 检查该目录中的文件转换结果
+                for matbin_file in files:
                     xml_file = matbin_file + '.xml'
                     if os.path.exists(xml_file):
-                        batch_results[matbin_file] = xml_file
+                        results[matbin_file] = xml_file
                     else:
-                        batch_results[matbin_file] = ""
+                        results[matbin_file] = ""
                     
-                    with count_lock:
-                        processed_count += 1
-                        current_count = processed_count
+                    processed_count += 1
                     
-                    # 细粒度更新进度（为了平滑性，每个文件都尝试更新，但限制频率防止UI卡顿）
-                    # 由于是多线程，这里直接回调即可，UI层通常有如QTimer的机制或者Qt本身的消息队列处理
-                    if callback and current_count % 5 == 0: 
-                         callback(current_count, total_files, f"处理中... ({current_count}/{total_files})", "转换中")
+                    # 更新进度
+                    if callback and processed_count % 100 == 0:
+                        callback(processed_count, total_files, f"处理中... ({processed_count}/{total_files})", "转换中")
                 
-                return batch_results
             except Exception as e:
-                logger.error(f"批次 {batch_index} 处理失败: {str(e)}")
-                # 标记该批次所有文件失败
-                for f in batch:
-                    batch_results[f] = ""
-                    with count_lock:
-                        processed_count += 1
-                return batch_results
-
-        # 使用线程池并发处理批次
-        # 注意：这里是"批次的并发"，每个批次内部是调用一次WitchyBND
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            future_to_batch = {
-                executor.submit(process_batch, i, batch): batch 
-                for i, batch in enumerate(batches)
-            }
-            
-            for future in as_completed(future_to_batch):
-                try:
-                    batch_res = future.result()
-                    results.update(batch_res)
-                except Exception as e:
-                    logger.error(f"批次任务异常: {str(e)}")
+                logger.error(f"处理目录 {directory} 时发生异常: {str(e)}")
+                # 标记该目录所有文件失败
+                for f in files:
+                    results[f] = ""
+                    processed_count += 1
 
         # 确保最后发送一次100%进度
         if callback:
@@ -1028,28 +1168,63 @@ class MaterialLibraryImporter:
                     pass
         
         try:
-            # 1. 解包DCX文件
-            # 传递 total=0 触发UI的忙碌动画
-            report_progress("解包DCX文件", 0, 0)
-            logger.info(f"开始解包DCX文件: {dcx_file}")
-            extracted_dir = self.processor.extract_dcx(dcx_file)
+            # 判断输入是 DCX 文件还是已解包的文件夹
+            # 判断输入是 DCX 文件还是已解包的文件夹
+            is_folder = os.path.isdir(dcx_file)
+            extracted_dir = None
             
-            # 2. 批量转换.matbin/.mtd为XML（最耗时的步骤）
-            logger.info(f"开始批量转换材质文件(.matbin/.mtd): {extracted_dir}")
+            if is_folder:
+                # 已解包的文件夹
+                report_progress("转换材质文件", 0, 0)
+                logger.info(f"检测到已解包的文件夹: {dcx_file}")
+                extracted_dir = dcx_file
+                
+                # 收集 matbin 文件
+                matbin_files = []
+                for root, dirs, files in os.walk(extracted_dir):
+                    for f in files:
+                        if f.endswith('.matbin') or f.endswith('.mtd'):
+                            matbin_files.append(os.path.join(root, f))
+                
+                if matbin_files:
+                    logger.info(f"找到 {len(matbin_files)} 个材质文件，开始批量转换")
+                    
+                    def matbin_progress(current, total, filename, status=""):
+                        report_progress("转换材质文件", current, total)
+                    
+                    self.processor.extract_matbin_to_xml_batch(
+                        matbin_files, 
+                        callback=matbin_progress
+                    )
+            else:
+                # DCX 文件：使用 -c -p 一步完成解包和转换
+                report_progress("解包DCX并转换材质", 0, 0)
+                logger.info(f"开始递归解包DCX文件（使用 -c -p 模式）: {dcx_file}")
+                
+                success, error, extracted_dir = self.processor.extract_dcx_recursive(dcx_file, timeout=600)
+                
+                if not success:
+                    raise RuntimeError(f"DCX解包失败: {error}")
+                
+                if not extracted_dir or not os.path.isdir(extracted_dir):
+                    raise RuntimeError("未找到解包输出目录")
+                
+                logger.info(f"递归解包完成，输出目录: {extracted_dir}")
+                
+            # 统一收集 XML 文件（无论是解包出来的，还是原本在文件夹里的，还是刚刚转换生成的）
+            report_progress("收集XML文件", 0, 0)
+            xml_files = []
+            if extracted_dir and os.path.isdir(extracted_dir):
+                for root, dirs, files in os.walk(extracted_dir):
+                    for f in files:
+                        if f.endswith('.xml') and not f.startswith('_witchy'):
+                            xml_files.append(os.path.join(root, f))
             
-            # 定义MATBIN转换进度回调
-            def matbin_progress(current, total, filename, status=""):
-                # 传递实际进度
-                report_progress("转换材质文件", current, total)
-            
-            xml_files = self.processor.batch_extract_matbins(
-                extracted_dir, 
-                progress_callback=matbin_progress
-            )
             result['xml_files'] = xml_files
+            logger.info(f"找到 {len(xml_files)} 个XML文件")
             
             if not xml_files:
-                raise RuntimeError("未找到可转换的材质文件(.matbin/.mtd)")
+                raise RuntimeError("未找到可转换的材质文件(.matbin/.mtd)或XML文件")
             
             # 3. 创建材质库
             report_progress("写入数据库", 0, 0)

@@ -58,6 +58,16 @@ class MaterialListModel(QAbstractListModel):
             return material.get('filename') or material.get('file_name') or _('unknown_material')
         elif role == Qt.UserRole:
             return material
+        elif role == Qt.ForegroundRole:
+            from PySide6.QtGui import QColor
+            # 深色主题下的高亮颜色 (文字高亮)
+            is_modified = material.get('is_modified', 0)
+            is_single = material.get('is_single_import', 0)
+            
+            if is_modified:
+                return QColor('#FFDD55') # 亮黄色文字 (修改过)
+            if is_single:
+                return QColor('#55FF55') # 亮绿色文字 (单独导入)
         
         return None
 
@@ -149,7 +159,7 @@ class ParamTableModel(QStandardItemModel):
                     return True
                 if stripped.lower() in ["false", "0", "no", "off"]:
                     return False
-                raise ValueError(f"无法解析布尔值: {text}")
+                raise ValueError(_('cannot_parse_bool').format(text=text))
         except Exception as e:
             if strict:
                 raise

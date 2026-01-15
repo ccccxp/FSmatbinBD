@@ -1005,7 +1005,7 @@ class BatchReplaceDialog(QDialog):
             }}
             QCheckBox::indicator:checked {{
                 background: {C['accent']};
-                image: url(src/gui_qt/assets/checkbox_check_white.svg);
+                image: url({get_assets_path("checkbox_check_white.svg").replace("\\", "/")});
             }}
         """)
         self.show_more_check.stateChanged.connect(self._on_show_more_changed)

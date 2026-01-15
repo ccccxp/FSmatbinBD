@@ -262,7 +262,7 @@ class LibraryManagerDialogQt(QDialog):
             if hasattr(self._db, "swap_library_order"):
                 self._db.swap_library_order(current_lib.id, prev_lib.id)
             else:
-                QMessageBox.warning(self, _('error'), "数据库不支持排序功能")
+                QMessageBox.warning(self, _('error'), _('db_sort_not_supported'))
                 return
         except Exception as exc:
             QMessageBox.warning(self, _('error'), str(exc))
@@ -290,7 +290,7 @@ class LibraryManagerDialogQt(QDialog):
             if hasattr(self._db, "swap_library_order"):
                 self._db.swap_library_order(current_lib.id, next_lib.id)
             else:
-                QMessageBox.warning(self, _('error'), "数据库不支持排序功能")
+                QMessageBox.warning(self, _('error'), _('db_sort_not_supported'))
                 return
         except Exception as exc:
             QMessageBox.warning(self, _('error'), str(exc))
@@ -321,7 +321,7 @@ class LibraryManagerDialogQt(QDialog):
             elif hasattr(self._db, "remove_library"):
                 self._db.remove_library(row.id)
             else:
-                raise RuntimeError("数据库未提供 delete_library/remove_library")
+                raise RuntimeError(_('db_delete_not_supported'))
         except Exception as exc:
             QMessageBox.warning(self, _('delete_failed'), str(exc))
             return
@@ -363,7 +363,7 @@ class LibraryManagerDialogQt(QDialog):
         root.setContentsMargins(14, 12, 14, 12)
         root.setSpacing(10)
 
-        title = QLabel(f"编辑库：{raw.get('name', '')}")
+        title = QLabel(_('edit_library_title').format(name=raw.get('name', '')))
         title.setStyleSheet("font-weight:600; font-size:14px;")
         root.addWidget(title)
 

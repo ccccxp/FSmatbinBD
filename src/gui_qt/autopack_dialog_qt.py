@@ -409,7 +409,7 @@ class AutoPackDialogQt(QDialog):
                 QMessageBox.warning(
                     self,
                     _('pack_execute_fail_title'),
-                    str(result.get("error") or "未知错误"),
+                    str(result.get("error") or _('unknown_error')),
                 )
         except Exception as exc:
             QMessageBox.warning(self, _('pack_execute_fail_title'), str(exc))

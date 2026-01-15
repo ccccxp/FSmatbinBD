@@ -381,10 +381,10 @@ class MaterialEditorPanel(QWidget):
             QComboBox::down-arrow {{
                 width: 12px;
                 height: 12px;
-                image: url(src/gui_qt/assets/combo_arrow_down.svg);
+                image: url({get_assets_path("combo_arrow_down.svg").replace("\\", "/")});
             }}
             QComboBox::down-arrow:hover {{
-                image: url(src/gui_qt/assets/combo_arrow_down.svg);
+                image: url({get_assets_path("combo_arrow_down.svg").replace("\\", "/")});
             }}
             QComboBox QAbstractItemView {{
                 background: rgba(20, 26, 40, 250);
@@ -464,7 +464,7 @@ class MaterialEditorPanel(QWidget):
             "QCheckBox::indicator:hover { border-color: rgba(255,255,255,120); }"
             "QCheckBox::indicator:checked {"
             f" background: {t['accent']}; border: 1px solid {t['accent_border']};"
-            " image: url(src/gui_qt/assets/checkbox_check_white.svg);"
+            " image: url({get_assets_path('checkbox_check_white.svg').replace('\\', '/')});"
             "}"
             "QCheckBox::indicator:checked:hover {"
             f" border: 1px solid {t['accent']};"
@@ -1577,7 +1577,7 @@ class MaterialEditorPanel(QWidget):
             }
             self.saveRequested.emit(updated)
         except Exception as exc:
-            QMessageBox.warning(self, "保存失败", f"收集参数时出错: {exc}")
+            QMessageBox.warning(self, _('save_failed'), _('collect_params_error').format(exc=exc))
 
 
 

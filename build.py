@@ -10,6 +10,7 @@ FSMatbinBD 本地打包脚本
 
 import os
 import sys
+import json
 import shutil
 import subprocess
 import argparse
@@ -18,8 +19,16 @@ from pathlib import Path
 # 项目根目录
 PROJECT_ROOT = Path(__file__).parent.absolute()
 
-# 版本信息
-VERSION = "1.2.1"
+# 从 version.json 读取版本号（与 GitHub 工作流一致）
+def load_version():
+    version_file = PROJECT_ROOT / 'version.json'
+    if version_file.exists():
+        with open(version_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data.get('version', '1.0.0')
+    return '1.0.0'
+
+VERSION = load_version()
 APP_NAME = 'FSMatbinBD'
 
 
@@ -30,7 +39,7 @@ def clean_build():
         path = PROJECT_ROOT / d
         if path.exists():
             print(f"清理目录: {path}")
-            shutil.rmtree(path)
+            shutil.rmtree(path, ignore_errors=True)
     
     # 清理 .pyc 文件
     for pyc in PROJECT_ROOT.rglob('*.pyc'):
@@ -112,17 +121,23 @@ def copy_additional_files():
         shutil.copy(config, dist_dir)
         print("复制: autopack_config.json")
     
-    # 复制工具目录
-    tools_src = PROJECT_ROOT / 'tools' / 'WitchyBND'
-    if tools_src.exists():
-        tools_dst = dist_dir / 'tools' / 'WitchyBND'
-        if tools_dst.exists():
-            shutil.rmtree(tools_dst)
-        shutil.copytree(tools_src, tools_dst)
-        print("复制: tools/WitchyBND")
+    # 注意：tools 目录已通过 spec 文件打包到 internal/tools 中
+    # 如果根目录下存在 tools 目录（来自旧版本构建），则删除它以避免混淆
+    files_to_remove = [
+        dist_dir / 'tools',
+        dist_dir / 'internal' / 'data' / 'databases' / 'materials.db'  # 示例：如果需要清理其他旧文件
+    ]
     
-    # 创建必要的目录结构
-    for subdir in ['data/databases', 'data/exports', 'autopack']:
+    tools_legacy = dist_dir / 'tools'
+    if tools_legacy.exists() and tools_legacy.is_dir():
+        try:
+            print(f"清理冗余的 tools 目录: {tools_legacy}")
+            shutil.rmtree(tools_legacy, ignore_errors=True)
+        except Exception as e:
+            print(f"警告: 无法清理 tools 目录: {e}")
+    
+    # 创建必要的目录结构（与 GitHub 工作流一致）
+    for subdir in ['temp', 'output', 'logs', 'autopack']:
         (dist_dir / subdir).mkdir(parents=True, exist_ok=True)
     
     print("额外文件复制完成")

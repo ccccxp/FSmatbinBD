@@ -487,7 +487,7 @@ class ColorPickerDialog(QDialog):
     def _open_system_picker(self):
         """打开系统取色器"""
         options = QColorDialog.ShowAlphaChannel if self._show_alpha else QColorDialog.ColorDialogOptions()
-        color = QColorDialog.getColor(self._color, self, "选择颜色", options)
+        color = QColorDialog.getColor(self._color, self, _("select_color"), options)
         if color.isValid():
             self._color = color
             self._update_all_from_color()

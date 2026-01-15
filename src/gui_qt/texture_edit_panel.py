@@ -551,7 +551,7 @@ class TextureEditPanel(QWidget):
             QCheckBox::indicator:checked {{
                 background-color: {C['accent']};
                 border-color: {C['accent']};
-                image: url(src/gui_qt/assets/checkbox_check_white.svg);
+                image: url({get_assets_path("checkbox_check_white.svg").replace("\\", "/")});
             }}
         """)
         self.show_more_check.stateChanged.connect(self._on_show_more_changed)
@@ -941,8 +941,8 @@ class TextureEditPanel(QWidget):
             import traceback
             QMessageBox.critical(
                 self, 
-                "批量替换错误", 
-                f"无法打开批量替换对话框:\n{str(e)}\n\n{traceback.format_exc()}"
+                _('batch_replace_error_title'), 
+                _('batch_replace_open_error').format(error=str(e), trace=traceback.format_exc())
             )
     
     def _on_batch_replace_cache_updated(self, cache: dict):

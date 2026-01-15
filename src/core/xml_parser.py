@@ -83,7 +83,7 @@ class MaterialXMLParser:
                 'file_name': os.path.basename(file_path),
                 'filename': self._get_element_text(root, 'filename', ''),
                 'shader_path': self._get_element_text(root, 'ShaderPath', ''),
-                'source_path': self._get_element_text(root, 'SourcePath', ''),
+                'source_path': self._get_element_text(root, 'SourcePath', '') or self._get_element_text(root, 'sourcePath', ''),
                 'compression': self._get_element_text(root, 'compression', ''),
                 'key': self._get_element_text(root, 'Key', ''),  # 老版本MTD可能没有Key
                 'description': self._get_element_text(root, 'Description', '') if is_mtd_format else '',  # MTD格式特有

@@ -3,20 +3,20 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*'  # 当推送 v* 格式的 tag 时触发（如 v1.0.0, v1.1.0）
+      - 'v*'  # Trigger on tags matching v* (e.g., v1.0.0, v1.1.0)
     branches:
-      - main  # main 分支推送时也构建（但不发布）
+      - main  # Build on main branch push (but no release)
   pull_request:
     branches:
       - main
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:  # Allow manual trigger
     inputs:
       version:
-        description: '版本号 (如 1.1.2)'
+        description: 'Version (e.g. 1.1.2)'
         required: false
         default: ''
       create_release:
-        description: '创建 GitHub Release'
+        description: 'Create GitHub Release'
         required: false
         type: boolean
         default: false
@@ -35,7 +35,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-        lfs: true  # 确保下载 Git LFS 管理的大文件（如数据库）
+        lfs: true  # Ensure Git LFS files (like database) are downloaded
       
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -53,7 +53,7 @@ jobs:
       id: version
       shell: pwsh
       run: |
-        # 读取当前 version.json
+        # Read current version.json
         $versionJsonPath = "version.json"
         if (Test-Path $versionJsonPath) {
           $versionConfig = Get-Content -Path $versionJsonPath -Raw | ConvertFrom-Json
@@ -62,20 +62,20 @@ jobs:
           $version = "dev"
         }
         
-        # 从标签获取版本（如果是标签触发），优先级高于配置文件
+        # Get version from tag (if triggered by tag), priority over config
         if ("${{ github.ref }}" -match "refs/tags/v(.+)") {
           $version = $matches[1]
         }
         
-        # 手动输入版本号优先级最高
+        # Manual input version has highest priority
         if ("${{ github.event.inputs.version }}" -ne "") {
           $version = "${{ github.event.inputs.version }}"
         }
         
-        # 获取当前日期
+        # Get current date
         $buildDate = Get-Date -Format "yyyy-MM-dd"
         
-        # 更新 version.json
+        # Update version.json
         $versionConfig = @{
           version = $version
           build_date = $buildDate
@@ -115,27 +115,27 @@ jobs:
       run: |
         $version = "${{ steps.version.outputs.VERSION }}"
         
-        # 复制 README 和配置文件
+        # Copy README and configs
         Copy-Item README.md dist/${{ env.APP_NAME }}/ -ErrorAction SilentlyContinue
         Copy-Item README_CN.md dist/${{ env.APP_NAME }}/ -ErrorAction SilentlyContinue
         
-        # 确保辅助目录存在（这些是用户运行时需要的目录）
+        # Ensure auxiliary directories exist (dirs needed by user at runtime)
         New-Item -ItemType Directory -Force -Path dist/${{ env.APP_NAME }}/temp | Out-Null
         New-Item -ItemType Directory -Force -Path dist/${{ env.APP_NAME }}/output | Out-Null
         New-Item -ItemType Directory -Force -Path dist/${{ env.APP_NAME }}/logs | Out-Null
         
-        # 检查数据库是否存在于 internal/data/databases/
+        # Check if database exists in internal/data/databases/
         $dbPath = "dist/${{ env.APP_NAME }}/internal/data/databases/materials.db"
         if (Test-Path $dbPath) {
           $dbSize = (Get-Item $dbPath).Length / 1MB
-          Write-Host "✓ 数据库文件存在: $([math]::Round($dbSize, 2)) MB"
+          Write-Host "✓ Database file exists: $([math]::Round($dbSize, 2)) MB"
           
-          # 复制数据库文件到根目录作为单独发布
+          # Copy database file to root for standalone release
           Copy-Item $dbPath "materials.db"
-          Write-Host "✓ 提取数据库文件: materials.db"
+          Write-Host "✓ Extracted database file: materials.db"
         } else {
-          Write-Host "⚠ 数据库文件不存在: $dbPath"
-          # 确保 data/databases 目录存在（用于精简版）
+          Write-Host "⚠ Database file missing: $dbPath"
+          # Ensure data/databases directory exists (for lite version)
           New-Item -ItemType Directory -Force -Path "dist/${{ env.APP_NAME }}/internal/data/databases" | Out-Null
         }
         
@@ -147,7 +147,7 @@ jobs:
         Compress-Archive -Path dist/${{ env.APP_NAME }}/* -DestinationPath $zipName -Force
         
         $zipSize = (Get-Item $zipName).Length / 1MB
-        Write-Host "✓ 完整版包: $zipName ($([math]::Round($zipSize, 2)) MB)"
+        Write-Host "✓ Full package: $zipName ($([math]::Round($zipSize, 2)) MB)"
         
     - name: Create Lite ZIP (without database)
       shell: pwsh
@@ -155,20 +155,20 @@ jobs:
         $version = "${{ steps.version.outputs.VERSION }}"
         $zipName = "${{ env.APP_NAME }}_v${version}_Windows_x64_Lite.zip"
         
-        # 删除数据库文件
+        # Remove database file
         $dbPath = "dist/${{ env.APP_NAME }}/internal/data/databases/materials.db"
         if (Test-Path $dbPath) {
           Remove-Item $dbPath -Force
-          Write-Host "✓ 已移除数据库文件"
+          Write-Host "✓ Database file removed"
         }
         
-        # 创建空的 .gitkeep 保持目录结构
+        # Create empty .gitkeep to maintain directory structure
         New-Item -ItemType File -Force -Path "dist/${{ env.APP_NAME }}/internal/data/databases/.gitkeep" | Out-Null
         
         Compress-Archive -Path dist/${{ env.APP_NAME }}/* -DestinationPath $zipName -Force
         
         $zipSize = (Get-Item $zipName).Length / 1MB
-        Write-Host "✓ 精简版包: $zipName ($([math]::Round($zipSize, 2)) MB)"
+        Write-Host "✓ Lite package: $zipName ($([math]::Round($zipSize, 2)) MB)"
         
     - name: Upload Full artifact
       uses: actions/upload-artifact@v4
@@ -196,7 +196,7 @@ jobs:
     name: Create GitHub Release
     needs: build
     runs-on: ubuntu-latest
-    # 仅在推送标签或手动触发且选择创建发布时运行
+    # Run ONLY on tag push OR manual trigger when create_release is true
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
     
     permissions:
@@ -224,49 +224,106 @@ jobs:
       with:
         merge-multiple: true
         
-    - name: List release files
+    - name: Generate Release Notes
+      id: release_notes
+      shell: python
+      env:
+        VERSION: ${{ steps.version.outputs.VERSION }}
       run: |
-        echo "Release files:"
-        ls -la *.zip *.db 2>/dev/null || echo "No release files found"
+        import os
+        import re
+        import sys
+        import uuid
+
+        version = os.environ.get('VERSION', 'dev')
         
+        # 1. Parse CHANGELOG.md
+        changelog_content = ""
+        current_version_notes = []
+        try:
+            if os.path.exists('CHANGELOG.md'):
+                with open('CHANGELOG.md', 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                    
+                capturing = False
+                for line in lines:
+                    # Match version header: ## [1.2.2]
+                    match = re.search(r'^##\s+\[([^\]]+)\]', line)
+                    if match:
+                        if match.group(1) == version:
+                            capturing = True
+                            continue
+                        elif capturing:
+                            # Stop at next version header
+                            break
+                    
+                    if capturing:
+                        current_version_notes.append(line)
+                        
+                changelog_content = "".join(current_version_notes).strip()
+            else:
+                print("CHANGELOG.md not found")
+        except Exception as e:
+            print(f"Error parsing CHANGELOG.md: {e}")
+            
+        if not changelog_content:
+            changelog_content = f"Release {version}"
+
+        # 2. List Files and Sizes
+        file_table = "| File | Size | Description |\n|---|---|---|\n"
+        files_found = False
+        
+        for file in os.listdir('.'):
+            if not os.path.isfile(file):
+                continue
+                
+            if file.endswith('.zip') or file.endswith('.db'):
+                size_mb = os.path.getsize(file) / (1024 * 1024)
+                desc = "Release Package"
+                if "Full" in file:
+                    desc = "**Full Version** (Includes Database)"
+                elif "Lite" in file:
+                    desc = "**Lite Version** (No Database)"
+                elif "materials.db" in file:
+                    desc = "Database Standalone"
+                    
+                file_table += f"| `{file}` | {size_mb:.2f} MB | {desc} |\n"
+                files_found = True
+                
+        if not files_found:
+            file_table = "No release files found."
+
+        # 3. Construct Final Body
+        body = f"""## FSMatbinBD v{version}
+
+### 📝 What's New
+{changelog_content}
+
+### 📦 Downloads
+{file_table}
+
+### 🚀 Installation
+**Full Version**: Extract and run `FSMatbinBD.exe`.
+**Lite Version**: Extract, then place `materials.db` into `internal/data/databases/`.
+"""
+        
+        # Output multi-line string to GITHUB_ENV using safe delimiter
+        env_file = os.environ.get('GITHUB_ENV')
+        if env_file:
+            eof_token = str(uuid.uuid4())
+            with open(env_file, 'a', encoding='utf-8') as f:
+                f.write(f"RELEASE_BODY<<{eof_token}\n")
+                f.write(body)
+                f.write(f"\n{eof_token}\n")
+        else:
+            print("GITHUB_ENV not found, cannot set environment variable.")
+            print("Release Body Preview:\n" + body)
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
         name: FSMatbinBD v${{ steps.version.outputs.VERSION }}
         tag_name: v${{ steps.version.outputs.VERSION }}
-        body: |
-          ## FSMatbinBD v${{ steps.version.outputs.VERSION }}
-          
-          ### 📦 下载选项
-          
-          | 文件 | 说明 | 大小 |
-          |------|------|------|
-          | `FSMatbinBD_vX.X.X_Windows_x64_Full.zip` | **完整版** - 包含预置游戏材质数据库 | ~200MB |
-          | `FSMatbinBD_vX.X.X_Windows_x64_Lite.zip` | **精简版** - 不含数据库，需自行导入 | ~50MB |
-          | `materials.db` | **游戏材质数据库** - 单独下载 | ~190MB |
-          
-          ### 🚀 安装说明
-          
-          **完整版**：
-          1. 下载 `Full.zip`，解压到任意目录
-          2. 运行 `FSMatbinBD.exe`
-          
-          **精简版（推荐老用户）**：
-          1. 下载 `Lite.zip`，解压到任意目录
-          2. 下载 `materials.db`
-          3. 将数据库文件放入 `internal/data/databases/` 目录
-          4. 运行 `FSMatbinBD.exe`
-          
-          ### ⚠️ 注意事项
-          
-          - 如需使用 DCX 导入功能，请确保 `tools/WitchyBND/` 目录完整
-          - 支持中文和英文界面
-          
-          ### 📝 系统要求
-          
-          - Windows 10/11 (64位)
-          - 无需安装 Python 或其他依赖
-          
+        body: ${{ env.RELEASE_BODY }}
         files: |
           *.zip
           *.db

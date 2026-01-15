@@ -1,4 +1,5 @@
 from .palette import COLORS
+from src.utils.resource_path import get_assets_path
 
 
 def load_stylesheet() -> str:
@@ -433,7 +434,7 @@ def load_stylesheet() -> str:
     QCheckBox::indicator:checked {{
         background: {c['accent']};
         border-color: {c['accent']};
-        image: url(src/gui_qt/assets/checkbox_check_white.svg);
+        image: url({get_assets_path("checkbox_check_white.svg").replace("\\", "/")});
     }}
     QCheckBox:disabled {{
         color: {c['fg_muted']};

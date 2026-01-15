@@ -52,7 +52,7 @@ class _DCXImportWorker(QThread):
             if not isinstance(result, dict):
                 result = {
                     "success": False,
-                    "error": "导入器未返回有效结果",
+                    "error": _('importer_invalid_result'),
                     "library_id": None,
                     "material_count": 0,
                 }
@@ -104,26 +104,42 @@ class DCXImportDialogQt(QDialog):
 
         self._build_ui()
 
+    def initialize(self, path: str = "", name: str = "", desc: str = ""):
+        """初始化预设值（用于从外部调用，如'从文件夹导入'）"""
+        if path:
+            self.dcx_path_edit.setText(path)
+            # 如果是文件夹，更新标题和提示
+            if os.path.isdir(path):
+                self.setWindowTitle(_('import_folder_dialog_header'))
+                self.ui_title.setText(_('import_folder_dialog_header'))
+                self.ui_hint.setText(_('import_folder_hint'))
+                self.ui_file_box.setTitle(_('folder_path_group'))
+                
+        if name:
+            self.name_edit.setText(name)
+        if desc:
+            self.desc_edit.setText(desc)
+
     def _build_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
 
-        title = QLabel(_('import_dcx_title'))
-        title.setStyleSheet("font-size: 12pt; font-weight: 700;")
-        layout.addWidget(title)
+        self.ui_title = QLabel(_('import_dcx_title'))
+        self.ui_title.setStyleSheet("font-size: 12pt; font-weight: 700;")
+        layout.addWidget(self.ui_title)
 
-        hint = QLabel(_('import_dcx_hint'))
-        hint.setStyleSheet("color:#9ca9c5;")
-        hint.setWordWrap(True)
-        layout.addWidget(hint)
+        self.ui_hint = QLabel(_('import_dcx_hint'))
+        self.ui_hint.setStyleSheet("color:#9ca9c5;")
+        self.ui_hint.setWordWrap(True)
+        layout.addWidget(self.ui_hint)
 
-        file_box = QGroupBox(_('dcx_files'))
-        file_box.setStyleSheet(
+        self.ui_file_box = QGroupBox(_('dcx_files'))
+        self.ui_file_box.setStyleSheet(
             "QGroupBox { background-color:#0d1222; border:1px solid #313b5c; border-radius:10px; margin-top:12px; padding:12px; }"
             "QGroupBox::title { subcontrol-origin: margin; left:12px; padding:0 6px; background-color:#0d1222; }"
         )
-        file_layout = QHBoxLayout(file_box)
+        file_layout = QHBoxLayout(self.ui_file_box)
         self.dcx_path_edit = QLineEdit()
         self.dcx_path_edit.setPlaceholderText(_('select_dcx_placeholder'))
         browse_btn = QPushButton(_('browse_button'))
@@ -131,7 +147,7 @@ class DCXImportDialogQt(QDialog):
         browse_btn.clicked.connect(self._choose_dcx)
         file_layout.addWidget(self.dcx_path_edit, 1)
         file_layout.addWidget(browse_btn)
-        layout.addWidget(file_box)
+        layout.addWidget(self.ui_file_box)
 
         info_box = QGroupBox(_('library_info'))
         info_box.setStyleSheet(
@@ -327,4 +343,4 @@ class DCXImportDialogQt(QDialog):
             self.imported.emit(result)
             self.accept()
         else:
-            QMessageBox.warning(self, _('import_failed'), _('import_dcx_failed_msg').format(error=result.get('error', '未知错误')))
+            QMessageBox.warning(self, _('import_failed'), _('import_dcx_failed_msg').format(error=result.get('error', _('unknown_error'))))
