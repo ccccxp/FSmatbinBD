@@ -194,6 +194,7 @@ jobs:
       with:
         name: ${{ env.APP_NAME }}_v${{ steps.version.outputs.VERSION }}_Windows_x64_Full
         path: ${{ env.APP_NAME }}_v${{ steps.version.outputs.VERSION }}_Windows_x64_Full.zip
+        compression-level: 0  # 不再压缩，因为内容已经是 ZIP
         retention-days: 30
         
     - name: Upload Lite artifact
@@ -201,6 +202,7 @@ jobs:
       with:
         name: ${{ env.APP_NAME }}_v${{ steps.version.outputs.VERSION }}_Windows_x64_Lite
         path: ${{ env.APP_NAME }}_v${{ steps.version.outputs.VERSION }}_Windows_x64_Lite.zip
+        compression-level: 0  # 不再压缩，因为内容已经是 ZIP
         retention-days: 30
         
     - name: Upload Database artifact
