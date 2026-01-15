@@ -11,6 +11,7 @@ import os
 import sys
 import json
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_submodules
 
 # 获取项目根目录（基于 spec 文件位置）
 PROJECT_ROOT = os.path.dirname(os.path.abspath(SPEC))
@@ -75,63 +76,7 @@ a = Analysis(
         'PySide6.QtWidgets',
         'PySide6.QtSvg',
         'PySide6.QtSvgWidgets',
-        
-        # 项目核心模块
-        'src.core.i18n',
-        'src.core.database',
-        'src.core.xml_parser',
-        'src.core.autopack_manager',
-        'src.core.material_matcher',
-        'src.core.multi_thread_matcher',
-        'src.core.fast_material_matcher',
-        'src.core.multi_thread_fast_matcher',
-        'src.core.witchybnd_processor',
-        'src.core.witchybnd_drag_drop',
-        'src.core.version',
-        'src.core.about_secure',
-        'src.core.material_replacer',
-        'src.core.material_replace_models',
-        'src.core.material_json_parser',
-        'src.core.sampler_type_parser',
-        'src.core.undo_redo_manager',
-        
-        # 工具模块
-        'src.utils.resource_path',
-        'src.utils.config',
-        'src.utils.helpers',
-        
-        # GUI 模块
-        'src.gui_qt.main_window',
-        'src.gui_qt.material_tree_panel',
-        'src.gui_qt.material_editor_panel',
-        'src.gui_qt.material_matching_dialog_qt',
-        'src.gui_qt.advanced_search_dialog_qt',
-        'src.gui_qt.autopack_dialog_qt',
-        'src.gui_qt.library_manager_dialog_qt',
-        'src.gui_qt.dcx_import_dialog_qt',
-        'src.gui_qt.import_dialogs_qt',
-        'src.gui_qt.sampler_panel',
-        'src.gui_qt.models',
-        'src.gui_qt.loading_overlay',
-        'src.gui_qt.smooth_scroll',
-        'src.gui_qt.color_picker_dialog',
-        'src.gui_qt.dark_titlebar',
-        'src.gui_qt.about_dialog_qt',
-        'src.gui_qt.batch_replace_dialog',
-        'src.gui_qt.material_replace_dialog',
-        'src.gui_qt.material_replace_editor',
-        'src.gui_qt.texture_edit_panel',
-        'src.gui_qt.standard_dialogs',
-        
-        # 主题模块
-        'src.gui_qt.theme.palette',
-        'src.gui_qt.theme.qss',
-        
-        # 子组件模块
-        'src.gui_qt.widgets',
-        'src.gui_qt.widgets.toast',
-        'src.gui_qt.dialogs',
-    ],
+    ] + collect_submodules('src'),  # 自动收集所有 src.* 子模块
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

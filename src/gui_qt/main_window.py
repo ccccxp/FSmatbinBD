@@ -11,7 +11,7 @@ import os
 import sys
 
 from .material_tree_panel import MaterialTreePanel
-from src.gui_qt.material_editor_panel import MaterialEditorPanel
+from .material_editor_panel import MaterialEditorPanel
 from .models import LibraryListModel, MaterialListModel
 from .loading_overlay import LoadingOverlay
 from .about_dialog_qt import AboutDialog
