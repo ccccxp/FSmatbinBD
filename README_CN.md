@@ -61,7 +61,7 @@ FSMatbinBD 是一个针对 **Elden Ring**、**Dark Souls 3**、**Sekiro** 及 **
 
 ## 工作流示例：模型移植
 
-以将 Dark Souls 3 模型移植到 Elden Ring 为例：
+以Elden Ring模型移植为例：
 
 ![材质匹配](images/match.png)
 

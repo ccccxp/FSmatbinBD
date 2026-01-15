@@ -61,7 +61,7 @@ Contains only the executable. Users can import their own game files.
 
 ## Workflow: Model Porting
 
-Example workflow for porting a mesh from Dark Souls 3 to Elden Ring:
+Example workflow for porting a mesh from Elden Ring to Nightreign:
 
 ![Match Workflow](images/match.png)
 
