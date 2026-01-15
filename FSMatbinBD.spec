@@ -35,12 +35,20 @@ if os.path.exists(version_file):
 # 定义需要包含的数据文件（使用相对路径）
 datas = []
 
-# GUI 资源文件
+# ============================================================
+# 重要：将整个 src 目录作为数据文件包含，确保所有 Python 模块可用
+# 这是解决 CI 打包时模块找不到问题的关键
+# ============================================================
+src_dir = os.path.join(PROJECT_ROOT, 'src')
+if os.path.exists(src_dir):
+    datas.append((src_dir, 'src'))
+
+# GUI 资源文件（已通过上面的 src 目录包含，但为了明确性保留）
 assets_dir = os.path.join(PROJECT_ROOT, 'src', 'gui_qt', 'assets')
 if os.path.exists(assets_dir):
     datas.append((assets_dir, 'src/gui_qt/assets'))
 
-# 主题文件
+# 主题文件（已通过上面的 src 目录包含，但为了明确性保留）
 theme_dir = os.path.join(PROJECT_ROOT, 'src', 'gui_qt', 'theme')
 if os.path.exists(theme_dir):
     datas.append((theme_dir, 'src/gui_qt/theme'))
@@ -127,7 +135,7 @@ src_modules = [
 
 a = Analysis(
     [os.path.join(PROJECT_ROOT, 'qt_main.py')],
-    pathex=[PROJECT_ROOT],
+    pathex=[PROJECT_ROOT, os.path.join(PROJECT_ROOT, 'src')],
     binaries=[],
     datas=datas,
     hiddenimports=[

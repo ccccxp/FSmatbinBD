@@ -97,6 +97,9 @@ jobs:
         Write-Host "=== Verifying source structure ==="
         Write-Host "Current directory: $(Get-Location)"
         Write-Host ""
+        Write-Host "=== src directory structure ==="
+        Get-ChildItem -Path src -Recurse -Filter "*.py" | ForEach-Object { Write-Host "  $($_.FullName)" }
+        Write-Host ""
         Write-Host "=== src/gui_qt directory contents ==="
         Get-ChildItem -Path src/gui_qt -Name | ForEach-Object { Write-Host "  $_" }
         Write-Host ""
@@ -109,12 +112,25 @@ jobs:
           Write-Host "  ✗ File NOT FOUND!"
           exit 1
         }
+        Write-Host ""
+        Write-Host "=== Checking all __init__.py files ==="
+        Get-ChildItem -Path src -Recurse -Filter "__init__.py" | ForEach-Object { 
+          Write-Host "  ✓ $($_.FullName)"
+        }
         
     - name: Build with PyInstaller
+      shell: pwsh
       run: |
+        # 设置 PYTHONPATH 确保 PyInstaller 能找到所有模块
+        $env:PYTHONPATH = "${{ github.workspace }}"
+        Write-Host "PYTHONPATH set to: $env:PYTHONPATH"
+        
+        # 验证模块可以被导入
+        python -c "import sys; sys.path.insert(0, '.'); from src.gui_qt import material_editor_panel; print('✓ material_editor_panel module OK')"
+        python -c "import sys; sys.path.insert(0, '.'); from src.gui_qt.main_window import launch; print('✓ main_window module OK')"
+        
+        # 执行打包
         pyinstaller FSMatbinBD.spec --noconfirm
-      env:
-        PYTHONPATH: ${{ github.workspace }}
         
     - name: Verify build
       shell: pwsh
@@ -127,6 +143,53 @@ jobs:
         } else {
           Write-Error "✗ Build failed: executable not found"
           exit 1
+        }
+        
+        # 验证打包的目录结构
+        Write-Host ""
+        Write-Host "=== Verifying packaged structure ==="
+        
+        # 检查 internal 目录（PyInstaller contents_directory='internal'）
+        $internalPath = "dist/${{ env.APP_NAME }}/internal"
+        if (Test-Path $internalPath) {
+          Write-Host "✓ internal directory exists"
+          
+          # 检查 src 目录是否被正确打包
+          $srcPath = "$internalPath/src"
+          if (Test-Path $srcPath) {
+            Write-Host "✓ src directory found in package"
+            
+            # 检查关键模块文件
+            $criticalFiles = @(
+              "src/gui_qt/material_editor_panel.py",
+              "src/gui_qt/main_window.py",
+              "src/gui_qt/__init__.py",
+              "src/core/__init__.py"
+            )
+            foreach ($file in $criticalFiles) {
+              $fullPath = "$internalPath/$file"
+              if (Test-Path $fullPath) {
+                Write-Host "  ✓ $file"
+              } else {
+                Write-Host "  ✗ MISSING: $file"
+              }
+            }
+          } else {
+            Write-Host "⚠ src directory not found in internal - checking alternative locations"
+            Get-ChildItem -Path $internalPath -Recurse -Filter "material_editor_panel.py" | ForEach-Object {
+              Write-Host "  Found at: $($_.FullName)"
+            }
+          }
+        } else {
+          Write-Host "⚠ internal directory not found"
+        }
+        
+        # 列出 dist 目录结构
+        Write-Host ""
+        Write-Host "=== dist/${{ env.APP_NAME }} structure ==="
+        Get-ChildItem -Path "dist/${{ env.APP_NAME }}" -Recurse -Depth 3 | ForEach-Object {
+          $indent = "  " * ($_.FullName.Split([IO.Path]::DirectorySeparatorChar).Count - $_.FullName.IndexOf('dist'))
+          Write-Host "$indent$($_.Name)"
         }
         
     - name: Prepare release packages
@@ -163,7 +226,12 @@ jobs:
       run: |
         $version = "${{ steps.version.outputs.VERSION }}"
         $zipName = "${{ env.APP_NAME }}_v${version}_Windows_x64_Full.zip"
-        Compress-Archive -Path dist/${{ env.APP_NAME }}/* -DestinationPath $zipName -Force
+        
+        # 复制 dist 目录用于 Full 版本
+        Copy-Item -Path "dist/${{ env.APP_NAME }}" -Destination "dist/${{ env.APP_NAME }}_Full" -Recurse
+        
+        # 创建 ZIP 用于 Release
+        Compress-Archive -Path "dist/${{ env.APP_NAME }}_Full/*" -DestinationPath $zipName -Force
         
         $zipSize = (Get-Item $zipName).Length / 1MB
         Write-Host "✓ Full package: $zipName ($([math]::Round($zipSize, 2)) MB)"
@@ -174,17 +242,21 @@ jobs:
         $version = "${{ steps.version.outputs.VERSION }}"
         $zipName = "${{ env.APP_NAME }}_v${version}_Windows_x64_Lite.zip"
         
-        # Remove database file
-        $dbPath = "dist/${{ env.APP_NAME }}/internal/data/databases/materials.db"
+        # 复制 dist 目录用于 Lite 版本
+        Copy-Item -Path "dist/${{ env.APP_NAME }}" -Destination "dist/${{ env.APP_NAME }}_Lite" -Recurse
+        
+        # Remove database file from Lite version
+        $dbPath = "dist/${{ env.APP_NAME }}_Lite/internal/data/databases/materials.db"
         if (Test-Path $dbPath) {
           Remove-Item $dbPath -Force
           Write-Host "✓ Database file removed"
         }
         
         # Create empty .gitkeep to maintain directory structure
-        New-Item -ItemType File -Force -Path "dist/${{ env.APP_NAME }}/internal/data/databases/.gitkeep" | Out-Null
+        New-Item -ItemType File -Force -Path "dist/${{ env.APP_NAME }}_Lite/internal/data/databases/.gitkeep" | Out-Null
         
-        Compress-Archive -Path dist/${{ env.APP_NAME }}/* -DestinationPath $zipName -Force
+        # 创建 ZIP 用于 Release
+        Compress-Archive -Path "dist/${{ env.APP_NAME }}_Lite/*" -DestinationPath $zipName -Force
         
         $zipSize = (Get-Item $zipName).Length / 1MB
         Write-Host "✓ Lite package: $zipName ($([math]::Round($zipSize, 2)) MB)"
@@ -193,16 +265,23 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ env.APP_NAME }}_v${{ steps.version.outputs.VERSION }}_Windows_x64_Full
-        path: ${{ env.APP_NAME }}_v${{ steps.version.outputs.VERSION }}_Windows_x64_Full.zip
-        compression-level: 0  # 不再压缩，因为内容已经是 ZIP
+        path: dist/${{ env.APP_NAME }}_Full/
         retention-days: 30
         
     - name: Upload Lite artifact
       uses: actions/upload-artifact@v4
       with:
         name: ${{ env.APP_NAME }}_v${{ steps.version.outputs.VERSION }}_Windows_x64_Lite
-        path: ${{ env.APP_NAME }}_v${{ steps.version.outputs.VERSION }}_Windows_x64_Lite.zip
-        compression-level: 0  # 不再压缩，因为内容已经是 ZIP
+        path: dist/${{ env.APP_NAME }}_Lite/
+        retention-days: 30
+        
+    - name: Upload Release ZIPs
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-zips
+        path: |
+          ${{ env.APP_NAME }}_v${{ steps.version.outputs.VERSION }}_Windows_x64_Full.zip
+          ${{ env.APP_NAME }}_v${{ steps.version.outputs.VERSION }}_Windows_x64_Lite.zip
         retention-days: 30
         
     - name: Upload Database artifact
@@ -240,10 +319,22 @@ jobs:
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Version: $VERSION"
         
-    - name: Download all artifacts
+    - name: Download release ZIPs
       uses: actions/download-artifact@v4
       with:
-        merge-multiple: true
+        name: release-zips
+        
+    - name: Download database artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: materials_database
+        path: .
+      continue-on-error: true  # 数据库可能不存在
+        
+    - name: List downloaded files
+      run: |
+        echo "=== Downloaded files ==="
+        ls -la
         
     - name: Generate Release Notes
       id: release_notes

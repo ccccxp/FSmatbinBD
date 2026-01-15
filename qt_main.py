@@ -3,6 +3,38 @@ Entry point for the new Qt-based GUI preview.
 Run with: python qt_main.py
 """
 import sys
+import os
+
+# ============================================================
+# 关键：确保在 PyInstaller 打包后能正确找到 src 模块
+# PyInstaller 使用 contents_directory='internal' 时，
+# 数据文件会被放在 internal 目录下
+# ============================================================
+def setup_path():
+    """设置 Python 模块搜索路径，确保打包后能找到所有模块"""
+    if getattr(sys, 'frozen', False):
+        # 打包后的运行环境
+        # sys._MEIPASS 是 PyInstaller 解压的临时目录（对于 onefile）
+        # 或者是可执行文件所在目录（对于 onedir）
+        base_path = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+        
+        # 检查 internal 目录（contents_directory 设置）
+        internal_path = os.path.join(os.path.dirname(sys.executable), 'internal')
+        if os.path.exists(internal_path):
+            if internal_path not in sys.path:
+                sys.path.insert(0, internal_path)
+        
+        # 也添加 base_path
+        if base_path not in sys.path:
+            sys.path.insert(0, base_path)
+    else:
+        # 开发环境：添加项目根目录
+        project_root = os.path.dirname(os.path.abspath(__file__))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+
+# 在任何导入之前设置路径
+setup_path()
 
 
 def check_integrity():
