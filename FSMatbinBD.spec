@@ -16,6 +16,10 @@ from PyInstaller.utils.hooks import collect_submodules
 # 获取项目根目录（基于 spec 文件位置）
 PROJECT_ROOT = os.path.dirname(os.path.abspath(SPEC))
 
+# 确保项目根目录在 sys.path 中，以便 collect_submodules 能正确发现模块
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 # 从 version.json 读取版本信息
 version_file = os.path.join(PROJECT_ROOT, 'version.json')
 VERSION = '1.0.0'

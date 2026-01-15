@@ -91,11 +91,30 @@ jobs:
         echo "VERSION=$version" >> $env:GITHUB_OUTPUT
         echo "BUILD_DATE=$buildDate" >> $env:GITHUB_OUTPUT
         
+    - name: Debug - Verify source structure
+      shell: pwsh
+      run: |
+        Write-Host "=== Verifying source structure ==="
+        Write-Host "Current directory: $(Get-Location)"
+        Write-Host ""
+        Write-Host "=== src/gui_qt directory contents ==="
+        Get-ChildItem -Path src/gui_qt -Name | ForEach-Object { Write-Host "  $_" }
+        Write-Host ""
+        Write-Host "=== Checking material_editor_panel.py ==="
+        if (Test-Path "src/gui_qt/material_editor_panel.py") {
+          Write-Host "  ✓ File exists"
+          $size = (Get-Item "src/gui_qt/material_editor_panel.py").Length
+          Write-Host "  Size: $size bytes"
+        } else {
+          Write-Host "  ✗ File NOT FOUND!"
+          exit 1
+        }
+        
     - name: Build with PyInstaller
       run: |
         pyinstaller FSMatbinBD.spec --noconfirm
       env:
-        PYTHONOPTIMIZE: 1
+        PYTHONPATH: ${{ github.workspace }}
         
     - name: Verify build
       shell: pwsh
