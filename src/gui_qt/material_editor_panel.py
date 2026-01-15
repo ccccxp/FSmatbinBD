@@ -464,7 +464,7 @@ class MaterialEditorPanel(QWidget):
             "QCheckBox::indicator:hover { border-color: rgba(255,255,255,120); }"
             "QCheckBox::indicator:checked {"
             f" background: {t['accent']}; border: 1px solid {t['accent_border']};"
-            " image: url({get_assets_path('checkbox_check_white.svg').replace('\\', '/')});"
+            f" image: url({get_assets_path('checkbox_check_white.svg').replace(chr(92), '/')});"
             "}"
             "QCheckBox::indicator:checked:hover {"
             f" border: 1px solid {t['accent']};"

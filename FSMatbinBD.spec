@@ -126,6 +126,11 @@ a = Analysis(
         # 主题模块
         'src.gui_qt.theme.palette',
         'src.gui_qt.theme.qss',
+        
+        # 子组件模块
+        'src.gui_qt.widgets',
+        'src.gui_qt.widgets.toast',
+        'src.gui_qt.dialogs',
     ],
     hookspath=[],
     hooksconfig={},
