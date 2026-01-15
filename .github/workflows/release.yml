@@ -3,16 +3,16 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*'  # Trigger on tags matching v* (e.g., v1.0.0, v1.1.0)
+      - 'v*'
     branches:
-      - main  # Build on main branch push (but no release)
+      - main
   pull_request:
     branches:
       - main
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:
     inputs:
       version:
-        description: 'Version (e.g. 1.1.2)'
+        description: 'Version (e.g. 1.2.2)'
         required: false
         default: ''
       create_release:
@@ -234,6 +234,7 @@ jobs:
         import re
         import sys
         import uuid
+        import textwrap
 
         version = os.environ.get('VERSION', 'dev')
         
@@ -294,36 +295,30 @@ jobs:
             file_table = "No release files found."
 
         # 3. Construct Final Body
-        body = f"""## FSMatbinBD v{version}
+        body = textwrap.dedent(f"""\
+            ## FSMatbinBD v{version}
 
-### 📝 What's New
-{changelog_content}
+            ### 📝 What's New
+            {changelog_content}
 
-### 📦 Downloads
-{file_table}
+            ### 📦 Downloads
+            {file_table}
 
-### 🚀 Installation
-**Full Version**: Extract and run `FSMatbinBD.exe`.
-**Lite Version**: Extract, then place `materials.db` into `internal/data/databases/`.
-"""
+            ### 🚀 Installation
+            **Full Version**: Extract and run `FSMatbinBD.exe`.
+            **Lite Version**: Extract, then place `materials.db` into `internal/data/databases/`.
+            """)
         
-        # Output multi-line string to GITHUB_ENV using safe delimiter
-        env_file = os.environ.get('GITHUB_ENV')
-        if env_file:
-            eof_token = str(uuid.uuid4())
-            with open(env_file, 'a', encoding='utf-8') as f:
-                f.write(f"RELEASE_BODY<<{eof_token}\n")
-                f.write(body)
-                f.write(f"\n{eof_token}\n")
-        else:
-            print("GITHUB_ENV not found, cannot set environment variable.")
-            print("Release Body Preview:\n" + body)
+        # Write to file
+        with open('release_notes.md', 'w', encoding='utf-8') as f:
+            f.write(body)
+            
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
         name: FSMatbinBD v${{ steps.version.outputs.VERSION }}
         tag_name: v${{ steps.version.outputs.VERSION }}
-        body: ${{ env.RELEASE_BODY }}
+        body_path: release_notes.md
         files: |
           *.zip
           *.db
